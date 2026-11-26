@@ -96,6 +96,10 @@ Out of book: uniform random legal move, and `fallback=True` is recorded. This is
 - Play: sample from top-k=5 with temperature 1.0 for variety; eval uses argmax.
 - Penultimate pooled features are exposed as `embed(board) -> np.ndarray` for retrieval.
 
+**Hybrid (`chess_trainer.agents.hybrid`):** at each position, the book if the position
+occurs in train; else uniform over the prep tree's in-repertoire moves if it has any; else
+the learned policy. Never falls back to random. Evaluated as a third agent.
+
 What the agent learns, in one sentence for the report: a mapping from board state to a
 distribution over GM-preferred moves that generalizes to positions never seen in training.
 
@@ -134,8 +138,9 @@ move. Events, each with a structured payload:
 
 ## 6. Evaluation harness (`chess_trainer.eval`)
 
-`uv run python -m chess_trainer.eval --agent {book,book-weighted,policy} --split test`
-(`--checkpoint <name>` for the policy, `--compare book` to prepend a strict-subset table)
+`uv run python -m chess_trainer.eval --agent {book,book-weighted,policy,hybrid} --split test`
+(`--checkpoint <name>` for the policy and hybrid, `--compare book resnet-main` to prepend
+side-by-side tables against earlier runs)
 writes `results/<agent>-<split>/metrics.json` and `metrics.md`. Every run reports each
 opening separately, on all positions and on the strict subset. Plots via
 `chess_trainer.eval.plots`.
