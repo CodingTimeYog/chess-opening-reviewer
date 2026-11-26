@@ -1,0 +1,141 @@
+﻿[Event "Fixture Open"]
+[Site "?"]
+[Date "2015.03.01"]
+[Round "1"]
+[White "Alpha, A"]
+[Black "Beta, B"]
+[Result "1-0"]
+[ECO "C84"]
+[WhiteElo "2600"]
+[BlackElo "2550"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 1-0
+
+[Event "Fixture Open"]
+[Site "?"]
+[Date "2015.03.01"]
+[Round "1"]
+[White "Alpha, A"]
+[Black "Beta, B"]
+[Result "1-0"]
+[ECO "C84"]
+[WhiteElo "2600"]
+[BlackElo "2550"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 1-0
+
+[Event "Fixture Open"]
+[Site "?"]
+[Date "2015.03.01"]
+[Round "1"]
+[White "Low, L"]
+[Black "Beta, B"]
+[Result "1-0"]
+[ECO "C84"]
+[WhiteElo "2600"]
+[BlackElo "2450"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 1-0
+
+[Event "Fixture Open"]
+[Site "?"]
+[Date "2015.03.01"]
+[Round "1"]
+[White "Ital, I"]
+[Black "Beta, B"]
+[Result "1-0"]
+[ECO "C50"]
+[WhiteElo "2700"]
+[BlackElo "2700"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 1-0
+
+[Event "Fixture Open"]
+[Site "?"]
+[Date "2015.03.01"]
+[Round "1"]
+[White "Tai, T"]
+[Black "Mano, M"]
+[Result "1/2-1/2"]
+[ECO "B48"]
+[WhiteElo "2450"]
+[BlackElo "2420"]
+
+1. e4 c5 2. Nf3 e6 3. d4 cxd4 4. Nxd4 Nc6 5. Nc3 Qc7 6. Be3 a6 1/2-1/2
+
+[Event "Fixture Open"]
+[Site "?"]
+[Date "2015.03.01"]
+[Round "1"]
+[White "Trans, T"]
+[Black "Pose, P"]
+[Result "0-1"]
+[ECO "B48"]
+[WhiteElo "2500"]
+[BlackElo "2500"]
+
+1. e4 c5 2. Nf3 Nc6 3. d4 cxd4 4. Nxd4 e6 5. Nc3 Qc7 6. Be2 a6 0-1
+
+[Event "Fixture Open"]
+[Site "?"]
+[Date "2015.03.01"]
+[Round "1"]
+[White "Tai, T"]
+[Black "Weak, W"]
+[Result "1-0"]
+[ECO "B48"]
+[WhiteElo "2450"]
+[BlackElo "2390"]
+
+1. e4 c5 2. Nf3 e6 3. d4 cxd4 4. Nxd4 Nc6 5. Nc3 Qc7 6. Be3 a6 1-0
+
+[Event "Fixture Open"]
+[Site "?"]
+[Date "2015.03.01"]
+[Round "1"]
+[White "Naj, N"]
+[Black "Dorf, D"]
+[Result "1-0"]
+[ECO "B90"]
+[WhiteElo "2700"]
+[BlackElo "2700"]
+
+1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 1-0
+
+[Event "Fixture Open"]
+[Site "?"]
+[Date "2015.03.01"]
+[Round "1"]
+[White "Open, O"]
+[Black "Ended, E"]
+[Result "*"]
+[ECO "C84"]
+[WhiteElo "2600"]
+[BlackElo "2600"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 *
+
+[Event "Fixture Open"]
+[Site "?"]
+[Date "2015.03.01"]
+[Round "1"]
+[White "No, N"]
+[Black "Elo, E"]
+[Result "1-0"]
+[ECO "C84"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 1-0
+
+[Event "Fixture Open"]
+[Site "?"]
+[Date "2019.??.??"]
+[Round "1"]
+[White "Gamma, G"]
+[Black "Delta, D"]
+[Result "0-1"]
+[ECO "C67"]
+[WhiteElo "2550"]
+[BlackElo "2560"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 Nf6 4. O-O Nxe4 5. d4 Nd6 0-1
+
