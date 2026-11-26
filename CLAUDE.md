@@ -45,6 +45,14 @@ OTB-only: ChessBase exports, no Lichess.
 is White against the Sicilian and would pollute the Black Taimanov repertoire).
 ChessBase `.cbh`/`.cbv` files must be exported to PGN first; we do not parse them.
 
+**"In repertoire" rule (`chess_trainer.data.repertoire`):** the tree stores every move the
+prep files discuss, each flagged `in_repertoire`.
+- Repertoire side (White in the Ruy Lopez, Black in the Taimanov): only a chapter's first
+  choice at a position counts, and never a move annotated `?`, `??` or `?!`.
+- Opponent side: every branch counts, so the trainer covers all opponent replies.
+- A move counts only if the position it is played from is itself on the repertoire path.
+  Lines below a rejected repertoire-side move stay in the tree for feedback but are off it.
+
 **Pipeline (`chess_trainer.data`):** `uv run python -m chess_trainer.data`. Parse with
 python-chess, classify by root position, filter, truncate at ply 40, emit one row per
 position: `game_id, opening, split, strict, ply, fen_norm, move_uci, result, white_elo,
@@ -61,7 +69,8 @@ State this split in the report; it is what makes "learning vs lookup" measurable
 
 ## 4. Agents
 
-Both implement `Agent.policy(board) -> dict[move_uci, prob]` and `Agent.choose(board, temperature)`.
+Both implement `Agent.policy(board) -> dict[move_uci, prob]`, `Agent.choose(board, temperature)`
+and `Agent.is_fallback(board)` (true when the agent has no knowledge of the position).
 
 **Book baseline (`chess_trainer.agents.book`):** `dict[fen_norm -> Counter[move_uci]]`
 built from the train split. Samples proportional to frequency (optional result weighting).
@@ -89,7 +98,8 @@ distribution over GM-preferred moves that generalizes to positions never seen in
 **Retrieval (`chess_trainer.rag`):** hybrid. Exact `fen_norm` lookup first; if fewer than
 k hits, nearest neighbors by cosine on policy embeddings (numpy brute force; corpus is
 small). Each hit returns game metadata, the move played from this position, and the full
-PGN for the embedded viewer. At equal score the game with the higher average rating ranks first.
+PGN for the embedded viewer. At equal score the game with the higher average rating ranks first, then the most recent
+year.
 
 **Engine (`chess_trainer.engine`):** Stockfish via python-chess UCI. Depth 14, one
 thread per analysis, cached by `fen_norm` in `data/cache/engine.sqlite`.
@@ -115,12 +125,14 @@ move. Events, each with a structured payload:
 
 ## 6. Evaluation harness (`chess_trainer.eval`)
 
-`uv run python -m chess_trainer.eval --agent {book,policy} --split test [--strict]`
-writes `results/<run>/metrics.json` and `metrics.md`. Plots via `chess_trainer.eval.plots`.
+`uv run python -m chess_trainer.eval --agent {book,policy} --split test`
+writes `results/<agent>-<split>/metrics.json` and `metrics.md`. Every run reports each
+opening separately, on all positions and on the strict subset. Plots via
+`chess_trainer.eval.plots`.
 
 | Metric | Definition |
 |---|---|
-| Opening coverage | % held-out positions with a non-fallback move; % test lines where the agent stays in repertoire or book for >= 10 own moves |
+| Opening coverage | % held-out positions with a non-fallback move; % test lines, replayed along the master moves, where the agent's first 10 own moves are all non-fallback and its top move is theory (played from that position in train, or in repertoire). Lines with fewer than 10 own moves are excluded. Reported with the agent on each side |
 | Move quality | mean/median centipawn loss vs Stockfish best; top-1/top-3 agreement with the GM move; top-1 agreement with Stockfish top-3 |
 | Retrieval relevance | precision@5 and MRR; relevant = retrieved game reaches the exact position, or shares ECO and the next GM move |
 | Feedback correctness | on a labeled set of (position, player move) with engine ground truth: classification accuracy, best move named correctly, zero hallucinated citations (every cited game exists in the corpus and reached the position) |
