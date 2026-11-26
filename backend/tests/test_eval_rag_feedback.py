@@ -128,6 +128,24 @@ def test_feedback_from_a_perfect_engine_scores_100_with_no_hallucinated_citation
     assert "classification accuracy" in text and "Confusion matrix" in text
 
 
+def test_an_llm_rewrite_that_drops_the_facts_fails_text_consistency(positions):
+    sample = sample_positions(positions, n_per_stratum=50)
+    evals = _evals(sample)
+    cases = build_cases(sample, evals)
+
+    class Vague:
+        def rewrite(self, facts, template_text):
+            return "Interesting choice. Keep developing your pieces."
+
+    builder = FeedbackBuilder(
+        BookAgent.from_positions(positions), {}, Retriever(positions, splits=None),
+        CacheAnalyser(evals), Vague(),
+    )  # fmt: skip
+    overall = evaluate_feedback(cases, builder, positions, evals)["overall"]
+    assert overall["llm_rewritten"] == 100.0 and overall["text_consistent"] == 0.0
+    assert overall["classification_accuracy"] == 100.0  # the facts are still right
+
+
 def test_a_wrong_engine_and_an_invented_citation_are_caught(positions):
     sample = sample_positions(positions, n_per_stratum=50)
     evals = _evals(sample)

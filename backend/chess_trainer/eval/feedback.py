@@ -13,7 +13,8 @@ built from them, and the template text. It never reads the offline scores. Check
 - classification accuracy: the feedback's class equals the ground-truth class;
 - best move named correctly: the named best move is one of the ground-truth best moves
   (also reported: within 10 cp of the best);
-- text consistency: the text names the same best move and class as the facts;
+- text consistency: the text names the same best move and class as the facts (with
+  `--llm ollama` the LLM rewrite is the text judged; `--limit N` scores a subset);
 - hallucinated citations: a cited game that does not exist or never reached the position.
 """
 
@@ -33,6 +34,7 @@ from chess_trainer.data.repertoire import load_tree
 from chess_trainer.engine import EvalCache, LiveAnalyser, clipped_cp, evaluate_positions
 from chess_trainer.eval.quality import SAMPLE_PER_STRATUM, sample_positions
 from chess_trainer.feedback import FeedbackBuilder, classify_loss
+from chess_trainer.feedback.llm import OllamaRewriter
 from chess_trainer.rag import Retriever
 
 KINDS = ("master", "best", "random")
@@ -105,7 +107,9 @@ def evaluate_feedback(
                 "class_ok": facts["classification"] == case.truth_class,
                 "best_ok": named in case.truth_best,
                 "best_near": max(scores.values()) - scores.get(named, -10_000) <= NEAR_CP,
-                "text_ok": _text_consistent(feedback["text"], facts),
+                # with the LLM layer on, its prose is what gets judged
+                "text_ok": _text_consistent(feedback.get("llm_text") or feedback["text"], facts),
+                "llm": feedback.get("llm_text") is not None,
                 "cited": len(cited),
                 "hallucinated": sum((c["game_id"], case.fen_norm) not in reached for c in cited),
             }
@@ -123,6 +127,7 @@ def evaluate_feedback(
             "best_move_correct": round(100 * sub["best_ok"].mean(), 2),
             "best_move_within_10cp": round(100 * sub["best_near"].mean(), 2),
             "text_consistent": round(100 * sub["text_ok"].mean(), 2),
+            "llm_rewritten": round(100 * sub["llm"].mean(), 2),
             "citations": int(sub["cited"].sum()),
             "hallucinated_citations": int(sub["hallucinated"].sum()),
         }
@@ -157,6 +162,7 @@ def feedback_markdown(metrics: dict, meta: dict) -> str:
         ("best move named correctly", "best_move_correct", ".1f"),
         ("best move within 10 cp of best", "best_move_within_10cp", ".1f"),
         ("text consistent with facts", "text_consistent", ".1f"),
+        ("rewritten by the LLM", "llm_rewritten", ".1f"),
         ("citations checked", "citations", ","),
         ("hallucinated citations", "hallucinated_citations", ","),
     ]
@@ -210,6 +216,10 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=config.SEED)
     parser.add_argument("--sample", type=int, default=SAMPLE_PER_STRATUM)
     parser.add_argument("--depth", type=int, default=config.ENGINE_DEPTH)
+    parser.add_argument(
+        "--llm", choices=["ollama"], help="judge the LLM rewrite instead of the template"
+    )
+    parser.add_argument("--limit", type=int, help="score a seeded random subset of this many cases")
     parser.add_argument("--data", type=Path, default=config.PROCESSED_DIR)
     parser.add_argument("--results", type=Path, default=config.RESULTS_DIR)
     args = parser.parse_args()
@@ -222,10 +232,17 @@ def main() -> None:
     cache = EvalCache()
     evals = evaluate_positions(sample["fen_norm"], depth=args.depth, cache=cache)
     cases = build_cases(sample, evals, seed=args.seed)
+    if args.limit and args.limit < len(cases):
+        cases = cases.sample(n=args.limit, random_state=args.seed).sort_index()
+    rewriter = OllamaRewriter() if args.llm else None
 
     analyser = LiveAnalyser(cache, depth=args.depth, use_full_cache=False)
     builder = FeedbackBuilder(
-        BookAgent.from_positions(positions), tree, Retriever(positions, splits=None), analyser
+        BookAgent.from_positions(positions),
+        tree,
+        Retriever(positions, splits=None),
+        analyser,
+        rewriter,
     )
     try:
         metrics = evaluate_feedback(cases, builder, positions, evals)
@@ -233,13 +250,14 @@ def main() -> None:
         analyser.close()
 
     meta = {
-        "layer": "template",
+        "layer": "llm" if args.llm else "template",
         "split": args.split,
         "seed": args.seed,
         "depth": args.depth,
         "git_sha": config.git_sha(),
     }
-    run_dir = args.results / f"feedback-{args.split}"
+    suffix = "-llm" if args.llm else ""
+    run_dir = args.results / f"feedback-{args.split}{suffix}"
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "metrics.json").write_text(
         json.dumps({**meta, **metrics}, indent=2), encoding="utf-8"
