@@ -113,4 +113,15 @@ def render_event(event_type: str, facts: dict) -> str:
             "The opening phase is over: the last "
             f"{facts['out_limit']} moves were outside both the book and your repertoire."
         )
+    board = facts.get("move", {})
+    side = facts.get("side", "").capitalize()
+    if event_type == "castled":
+        return f"{side} castled {board['castled']}."
+    if event_type == "queens_off":
+        return "The queens are off the board."
+    if event_type == "minor_piece_trade":
+        first, second = facts["trade"]
+        return f"Minor pieces were traded: a {first} for a {second}."
+    if event_type == "structure_shift":
+        return f"The pawn structure changed: {'; '.join(board['structure'])}."
     raise ValueError(f"unknown event type: {event_type}")

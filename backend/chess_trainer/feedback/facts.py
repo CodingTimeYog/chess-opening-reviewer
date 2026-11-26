@@ -9,6 +9,7 @@ import chess
 from chess_trainer.agents.book import BookAgent
 from chess_trainer.data.openings import fen_norm
 from chess_trainer.engine import clipped_cp
+from chess_trainer.feedback.structure import board_facts
 
 MAX_CITATIONS = 3
 THRESHOLDS = ((200, "blunder"), (100, "mistake"), (50, "inaccuracy"))  # centipawn loss
@@ -44,6 +45,7 @@ class FeedbackBuilder:
             "best": None,
             "eval_best_cp": None,
             "eval_played_cp": None,
+            "move": board_facts(board, move),
         }
         if analyse:
             verdict = self.analyser.analyse(board, move)

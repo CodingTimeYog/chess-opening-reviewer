@@ -5,6 +5,8 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+import pandas as pd
+
 from chess_trainer import config
 from chess_trainer.data.ingest import STAGES, build_corpus
 from chess_trainer.data.openings import OPENINGS
@@ -68,6 +70,11 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=config.PROCESSED_DIR)
     parser.add_argument("--results", type=Path, default=config.RESULTS_DIR)
     parser.add_argument("--seed", type=int, default=config.SEED)
+    parser.add_argument(
+        "--games-only",
+        action="store_true",
+        help="rewrite only games.parquet, after checking ids and splits are unchanged",
+    )
     args = parser.parse_args()
 
     masters = sorted((args.raw / "masters").glob("*.pgn"))
@@ -77,6 +84,18 @@ def main() -> None:
 
     args.out.mkdir(parents=True, exist_ok=True)
     args.results.mkdir(parents=True, exist_ok=True)
+    if args.games_only:
+        old = pd.read_parquet(args.out / "games.parquet")
+        same = (
+            old.set_index("game_id")["split"]
+            .sort_index()
+            .equals(games.set_index("game_id")["split"].sort_index())
+        )
+        if not same:
+            raise SystemExit("game ids or splits changed: run the full pipeline instead")
+        games.to_parquet(args.out / "games.parquet", index=False)
+        print(f"games.parquet rewritten: {len(games):,} games, columns {list(games.columns)}")
+        return
     games.to_parquet(args.out / "games.parquet", index=False)
     positions.to_parquet(args.out / "positions.parquet", index=False)
     (args.out / "repertoire.json").write_text(json.dumps(tree), encoding="utf-8")

@@ -29,6 +29,7 @@ GAME_COLUMNS = [
     "white",
     "black",
     "n_plies",
+    "pgn",
 ]
 
 
@@ -36,6 +37,11 @@ def read_games(path: Path) -> Iterator[chess.pgn.Game]:
     with open(path, encoding="utf-8-sig", errors="replace") as handle:
         while (game := chess.pgn.read_game(handle)) is not None:
             yield game
+
+
+def _pgn_exporter() -> chess.pgn.StringExporter:
+    """Headers and main line only: the annotations are not ours to redistribute."""
+    return chess.pgn.StringExporter(headers=True, variations=False, comments=False)
 
 
 def _elo(value: str | None) -> int | None:
@@ -116,6 +122,7 @@ def build_corpus(
                     "white": h.get("White", ""),
                     "black": h.get("Black", ""),
                     "n_plies": len(moves),
+                    "pgn": game.accept(_pgn_exporter()),
                 }
             )
 
@@ -128,7 +135,9 @@ def build_corpus(
         for ply, (fen, uci) in enumerate(rows)
     ]
     pos = pd.DataFrame(flat, columns=["game_id", "ply", "fen_norm", "move_uci"])
-    positions_df = pos.merge(games_df.drop(columns="n_plies"), on="game_id", validate="m:1")
+    positions_df = pos.merge(
+        games_df.drop(columns=["n_plies", "pgn"]), on="game_id", validate="m:1"
+    )
     positions_df["strict"] = mark_strict(positions_df)
 
     stats["seed"] = seed

@@ -64,6 +64,14 @@ def test_corpus_filters_and_logs_each_stage(corpus):
     assert games["game_id"].is_unique
 
 
+def test_games_keep_a_clean_pgn_and_positions_do_not(corpus):
+    games, positions, _ = corpus
+    pgn = games.loc[games["white"] == "Alpha, A", "pgn"].item()
+    assert pgn.startswith('[Event "Fixture Open"]')
+    assert "1. e4 e5 2. Nf3 Nc6 3. Bb5 a6" in pgn and pgn.rstrip().endswith("1-0")
+    assert "pgn" not in positions.columns
+
+
 def test_positions_one_row_per_ply_with_metadata(corpus):
     games, positions, _ = corpus
     gid = games.loc[games["white"] == "Alpha, A", "game_id"].item()
