@@ -1,14 +1,16 @@
 """Train the policy network.
 
-uv run python -m chess_trainer.agents.train --name resnet_main
+uv run python -m chess_trainer.agents.train --name resnet_main --resume
 
 Loss = weighted cross-entropy against the master move over the legal moves
        + 0.25 * MSE between the value head and the game result (when the head is on).
-The best checkpoint by val top-1 is written to data/checkpoints/<name>.pt.
+The best checkpoint by val top-1 is written to data/checkpoints/<name>.pt, and the full
+training state after every epoch to <name>_last.pt; --resume continues from the latter.
 """
 
 import argparse
 import json
+import os
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -62,6 +64,13 @@ def _run(
     return total_loss / seen, 100 * hits / seen
 
 
+def _save(payload: dict, path: Path) -> None:
+    """Write to a temporary file and rename, so a kill mid-write cannot corrupt a checkpoint."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    torch.save(payload, tmp)
+    os.replace(tmp, path)
+
+
 def train(
     positions: pd.DataFrame,
     name: str,
@@ -75,36 +84,32 @@ def train(
     patience: int = 2,
     seed: int = config.SEED,
     threads: int | None = None,
+    resume: bool = False,
     log: Callable[[str], None] = print,
 ) -> dict:
+    """Train and return the history. Two files are written to `out_dir`:
+
+    - `<name>.pt`: weights of the best epoch by val top-1 (what the agent loads);
+    - `<name>_last.pt`: full state after every epoch (model, optimizer, scheduler, shuffle
+      RNG, history). With `resume=True` an interrupted run continues from it with the
+      hyperparameters it was started with; without one the run starts fresh.
+    """
     out_dir = Path(out_dir or config.CHECKPOINT_DIR)
     out_dir.mkdir(parents=True, exist_ok=True)
+    best_path, last_path = out_dir / f"{name}.pt", out_dir / f"{name}_last.pt"
     if threads:
         torch.set_num_threads(threads)
-    torch.manual_seed(seed)
-    rng = np.random.default_rng(seed)
 
-    started = time.perf_counter()
-    train_arrays = build_arrays(positions[positions["split"] == "train"], result_weighted)
-    val_arrays = build_arrays(positions[positions["split"] == "val"], result_weighted)
-    log(
-        f"{name}: {len(train_arrays):,} train and {len(val_arrays):,} val positions encoded "
-        f"in {time.perf_counter() - started:.0f}s; result_weighted={result_weighted}, "
-        f"value_head={value_head}, seed={seed}, threads={torch.get_num_threads()}"
-    )
-
-    model = PolicyNet(value_head=value_head)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    steps_per_epoch = (len(train_arrays) + batch_size - 1) // batch_size
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, epochs * steps_per_epoch)
-    val_order = np.arange(len(val_arrays))
-
-    history: dict = {
-        "name": name,
-        "seed": seed,
-        "git_sha": config.git_sha(),
-        "params": sum(p.numel() for p in model.parameters()),
-        "hyperparameters": {
+    last = torch.load(last_path, weights_only=False) if resume and last_path.exists() else None
+    if last is not None:
+        history = last["history"]
+        hp = history["hyperparameters"]
+        seed = history["seed"]
+        if last["finished"]:
+            log(f"{name} already finished at epoch {last['epoch']}; nothing to resume")
+            return history
+    else:
+        hp = {
             "epochs": epochs,
             "batch_size": batch_size,
             "lr": lr,
@@ -112,17 +117,54 @@ def train(
             "result_weighted": result_weighted,
             "value_head": value_head,
             "patience": patience,
-        },
-        "epochs": [],
-        "best_epoch": 0,
-        "best_val_top1": -1.0,
-        "stopped_early": False,
-    }
-    for epoch in range(1, epochs + 1):
+        }
+        history = {
+            "name": name,
+            "seed": seed,
+            "git_sha": config.git_sha(),
+            "hyperparameters": hp,
+            "epochs": [],
+            "best_epoch": 0,
+            "best_val_top1": -1.0,
+            "stopped_early": False,
+        }
+
+    started = time.perf_counter()
+    train_arrays = build_arrays(positions[positions["split"] == "train"], hp["result_weighted"])
+    val_arrays = build_arrays(positions[positions["split"] == "val"], hp["result_weighted"])
+    log(
+        f"{name}: {len(train_arrays):,} train and {len(val_arrays):,} val positions encoded "
+        f"in {time.perf_counter() - started:.0f}s; result_weighted={hp['result_weighted']}, "
+        f"value_head={hp['value_head']}, seed={seed}, threads={torch.get_num_threads()}"
+    )
+
+    torch.manual_seed(seed)
+    rng = np.random.default_rng(seed)
+    model = PolicyNet(value_head=hp["value_head"])
+    optimizer = torch.optim.AdamW(model.parameters(), lr=hp["lr"], weight_decay=hp["weight_decay"])
+    steps_per_epoch = (len(train_arrays) + hp["batch_size"] - 1) // hp["batch_size"]
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, hp["epochs"] * steps_per_epoch
+    )
+    history["params"] = sum(p.numel() for p in model.parameters())
+    first_epoch = 1
+    if last is not None:
+        model.load_state_dict(last["model"])
+        optimizer.load_state_dict(last["optimizer"])
+        scheduler.load_state_dict(last["scheduler"])
+        rng.bit_generator.state = last["rng"]
+        first_epoch = last["epoch"] + 1
+        log(
+            f"resuming {name} from epoch {last['epoch']} "
+            f"(best val top-1 so far {last['best_val_top1']:.2f}%)"
+        )
+    val_order = np.arange(len(val_arrays))
+
+    for epoch in range(first_epoch, hp["epochs"] + 1):
         tick = time.perf_counter()
         order = rng.permutation(len(train_arrays))
         train_loss, train_top1 = _run(
-            model, train_arrays, order, batch_size, optimizer, scheduler, progress=log
+            model, train_arrays, order, hp["batch_size"], optimizer, scheduler, progress=log
         )
         val_loss, val_top1 = _run(model, val_arrays, val_order, 1024)
         minutes = (time.perf_counter() - tick) / 60
@@ -137,25 +179,42 @@ def train(
             }
         )
         improved = val_top1 > history["best_val_top1"]
-        log(
-            f"epoch {epoch}/{epochs}  train loss {train_loss:.4f}  val loss {val_loss:.4f}  "
-            f"val top-1 {val_top1:.2f}%  ({minutes:.1f} min){'  *best*' if improved else ''}"
-        )
         if improved:
             history["best_epoch"], history["best_val_top1"] = epoch, round(val_top1, 2)
-            torch.save(
+        stop = not improved and epoch - history["best_epoch"] >= hp["patience"]
+        history["stopped_early"] = stop
+        if improved:
+            _save(
                 {
                     "model": model.state_dict(),
                     "config": model.config,
                     "epoch": epoch,
-                    "val_top1": round(val_top1, 2),
+                    "val_top1": history["best_val_top1"],
                     "history": history,
                 },
-                out_dir / f"{name}.pt",
+                best_path,
             )
-        elif epoch - history["best_epoch"] >= patience:
-            history["stopped_early"] = True
-            log(f"early stop: no val top-1 improvement for {patience} epochs")
+        _save(
+            {
+                "model": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "rng": rng.bit_generator.state,
+                "config": model.config,
+                "epoch": epoch,
+                "best_val_top1": history["best_val_top1"],
+                "finished": stop or epoch == hp["epochs"],
+                "history": history,
+            },
+            last_path,
+        )
+        # Logged after both checkpoints are on disk: a printed epoch is a saved epoch.
+        log(
+            f"epoch {epoch}/{hp['epochs']}  train loss {train_loss:.4f}  val loss {val_loss:.4f}  "
+            f"val top-1 {val_top1:.2f}%  ({minutes:.1f} min){'  *best*' if improved else ''}"
+        )
+        if stop:
+            log(f"early stop: no val top-1 improvement for {hp['patience']} epochs")
             break
     (out_dir / f"{name}.history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
     log(f"best: epoch {history['best_epoch']}, val top-1 {history['best_val_top1']:.2f}%")
@@ -172,6 +231,9 @@ def main() -> None:
     parser.add_argument("--patience", type=int, default=2)
     parser.add_argument("--seed", type=int, default=config.SEED)
     parser.add_argument("--threads", type=int, default=None)
+    parser.add_argument(
+        "--resume", action="store_true", help="continue from <name>_last.pt if it exists"
+    )
     parser.add_argument("--unweighted", action="store_true", help="ablation: no result weighting")
     parser.add_argument("--no-value-head", action="store_true", help="ablation: no value head")
     args = parser.parse_args()
@@ -188,6 +250,7 @@ def main() -> None:
         patience=args.patience,
         seed=args.seed,
         threads=args.threads,
+        resume=args.resume,
         log=lambda line: print(line, flush=True),
     )
 

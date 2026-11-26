@@ -147,3 +147,71 @@ def test_training_without_value_head(positions, tmp_path):
     )  # fmt: skip
     assert PolicyAgent.from_checkpoint(tmp_path / "nov.pt").model.value is None
     assert len(history["epochs"]) == 2
+
+
+class _Interrupt(Exception):
+    pass
+
+
+def _kill_after(epoch_line):
+    def log(line):
+        if line.startswith(epoch_line):
+            raise _Interrupt
+
+    return log
+
+
+def _curve(history):
+    return [(e["epoch"], e["train_loss"], e["val_loss"], e["val_top1"]) for e in history["epochs"]]
+
+
+def test_resume_continues_exactly_where_an_interrupted_run_stopped(positions, tmp_path):
+    kwargs = dict(epochs=4, batch_size=8, lr=3e-3, patience=10, seed=0, threads=1)
+    straight = train(positions, name="a", out_dir=tmp_path, log=lambda _: None, **kwargs)
+
+    with pytest.raises(_Interrupt):
+        train(positions, name="b", out_dir=tmp_path, log=_kill_after("epoch 2/4"), **kwargs)
+    last = torch.load(tmp_path / "b_last.pt", weights_only=False)
+    assert last["epoch"] == 2
+    assert {"model", "optimizer", "scheduler", "epoch", "best_val_top1"} <= set(last)
+
+    lines = []
+    resumed = train(positions, name="b", out_dir=tmp_path, resume=True, log=lines.append, **kwargs)
+    assert any("resuming b from epoch 2" in line for line in lines)
+    assert _curve(resumed) == _curve(straight)
+    assert resumed["best_val_top1"] == straight["best_val_top1"]
+    a = torch.load(tmp_path / "a_last.pt", weights_only=False)["model"]
+    b = torch.load(tmp_path / "b_last.pt", weights_only=False)["model"]
+    assert all(torch.equal(a[key], b[key]) for key in a)
+    # the best checkpoint is still the best epoch's weights, not the last epoch's
+    best = torch.load(tmp_path / "b.pt", weights_only=False)
+    assert best["val_top1"] == resumed["best_val_top1"] and best["epoch"] == resumed["best_epoch"]
+
+
+def test_resume_without_a_checkpoint_starts_fresh_and_a_finished_run_is_not_retrained(
+    positions, tmp_path
+):
+    kwargs = dict(epochs=2, batch_size=8, seed=0, threads=1)
+    lines = []
+    first = train(positions, name="c", out_dir=tmp_path, resume=True, log=lines.append, **kwargs)
+    assert len(first["epochs"]) == 2
+    assert not any("resuming" in line for line in lines)
+    lines.clear()
+    again = train(positions, name="c", out_dir=tmp_path, resume=True, log=lines.append, **kwargs)
+    assert _curve(again) == _curve(first)
+    assert any("already finished" in line for line in lines)
+
+
+def test_resume_keeps_the_original_hyperparameters(positions, tmp_path):
+    with pytest.raises(_Interrupt):
+        train(
+            positions, name="d", out_dir=tmp_path, epochs=3, batch_size=8, lr=3e-3, seed=0,
+            threads=1, log=_kill_after("epoch 1/3"),
+        )  # fmt: skip
+    resumed = train(
+        positions, name="d", out_dir=tmp_path, epochs=9, batch_size=64, lr=1.0, seed=5,
+        threads=1, resume=True, log=lambda _: None,
+    )  # fmt: skip
+    assert resumed["hyperparameters"]["epochs"] == 3
+    assert resumed["hyperparameters"]["lr"] == 3e-3
+    assert len(resumed["epochs"]) == 3
