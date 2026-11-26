@@ -118,14 +118,29 @@ class Retriever:
 
     def retrieve(self, fen: str, k: int = 5, ply: int = 0, opening: str | None = None) -> list[Hit]:
         hits = self.exact(fen, k)
-        if len(hits) >= k or self._matrix is None or self.embed is None:
+        if len(hits) >= k:
+            return hits
+        taken = {hit.game_id for hit in hits}
+        return hits + self.similar(fen, k - len(hits), ply, opening, exclude=taken)
+
+    def similar(
+        self,
+        fen: str,
+        k: int = 5,
+        ply: int = 0,
+        opening: str | None = None,
+        exclude: set[str] | frozenset[str] = frozenset(),
+    ) -> list[Hit]:
+        """Games from the nearest other positions by embedding; never an exact match."""
+        hits: list[Hit] = []
+        if k <= 0 or self._matrix is None or self.embed is None:
             return hits
         query = np.asarray(self.embed(fen, ply), dtype=np.float32)
         similarity = self._matrix @ (query / max(float(np.linalg.norm(query)), 1e-12))
         if opening in self._in_opening:
             similarity = np.where(self._in_opening[opening], similarity, -np.inf)
         nearest = np.argsort(-similarity, kind="stable")[:_NEIGHBOUR_POSITIONS]
-        taken = {hit.game_id for hit in hits}
+        taken = set(exclude)
         candidates = []
         for i in nearest:
             if not np.isfinite(similarity[i]) or self._fens[i] == fen:

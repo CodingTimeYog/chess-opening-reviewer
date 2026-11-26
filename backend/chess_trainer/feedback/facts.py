@@ -27,7 +27,8 @@ def _move(board: chess.Board, uci: str) -> dict:
 class FeedbackBuilder:
     """Collects the facts for a move and renders the deterministic template text."""
 
-    def __init__(self, book: BookAgent, tree: dict, retriever, analyser) -> None:
+    def __init__(self, book: BookAgent, tree: dict, retriever, analyser, rewriter=None) -> None:
+        self.rewriter = rewriter  # optional LLM layer; None means template only
         self.book = book
         self.tree = tree
         self.retriever = retriever
@@ -112,4 +113,13 @@ class FeedbackBuilder:
         from chess_trainer.feedback.template import render_move
 
         facts = self.move_facts(board, move, analyse)
-        return {"text": render_move(facts), "facts": facts, "citations": facts["citations"]}
+        text = render_move(facts)
+        llm_text = None
+        if self.rewriter is not None and analyse:
+            llm_text = self.rewriter.rewrite(facts, text)
+        return {
+            "text": text,
+            "llm_text": llm_text,
+            "facts": facts,
+            "citations": facts["citations"],
+        }

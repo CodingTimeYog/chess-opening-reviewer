@@ -30,7 +30,8 @@ class EvalCache:
     def __init__(self, path: Path | None = None) -> None:
         path = Path(path or config.CACHE_DIR / "engine.sqlite")
         path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(path)
+        # One connection may be used from several threads; callers serialise access.
+        self._db = sqlite3.connect(path, check_same_thread=False)
         self._db.execute(
             "CREATE TABLE IF NOT EXISTS evals ("
             "fen TEXT NOT NULL, move TEXT NOT NULL, depth INTEGER NOT NULL, "
@@ -123,6 +124,21 @@ class LiveAnalyser:
         root_moves = [move] if move is not None else None
         info = self._engine.analyse(board, limit, root_moves=root_moves, game=object())
         return info["pv"][0].uci(), _score(info, board.turn)
+
+    def best(self, board: chess.Board) -> tuple[str, Score]:
+        """Best move and its score, from either cache or one search."""
+        fen = board.epd()
+        if self.use_full_cache:
+            full = self.cache.get(fen, self.depth)
+            if full:
+                best = max(sorted(full), key=lambda m: clipped_cp(*full[m]))
+                return best, full[best]
+        for move, (score, is_best) in self.cache.get_live(fen, self.depth).items():
+            if is_best:
+                return move, score
+        best, score = self._search(board, None)
+        self.cache.put_live(fen, self.depth, best, score, best=True)
+        return best, score
 
     def analyse(self, board: chess.Board, move: chess.Move) -> MoveAnalysis:
         fen, uci = board.epd(), move.uci()
