@@ -9,13 +9,16 @@ The eval index holds train games only (so a held-out game cannot retrieve itself
 index holds every game (`splits=None`).
 """
 
+import hashlib
 import random
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from chess_trainer import config
 from chess_trainer.config import SEED
 from chess_trainer.data.openings import board_from
 
@@ -151,6 +154,35 @@ def index_embeddings(retriever: Retriever, agent, batch_size: int = 1024) -> Non
     matrix = agent.embed_batch(list(indexed["fen_norm"]), list(indexed["ply"]), batch_size)
     retriever.set_embeddings(list(indexed["fen_norm"]), matrix)
     retriever.embed = lambda fen, ply: agent.embed(board_from(fen, ply))
+
+
+def checkpoint_signature(path: Path) -> str:
+    """Hash of a checkpoint file, stored with an index so a stale one is never reused."""
+    return hashlib.sha1(Path(path).read_bytes()).hexdigest()
+
+
+def load_or_build_index(retriever: Retriever, agent, path: Path, signature: str) -> str:
+    """Attach embeddings from `path` if it was built from the same checkpoint and the same
+    indexed positions; otherwise embed the positions and write the file. Returns which."""
+    path = Path(path)
+    retriever.embed = lambda fen, ply: agent.embed(board_from(fen, ply))
+    indexed = retriever.indexed_positions()
+    fens = list(indexed["fen_norm"])
+    if path.exists():
+        with np.load(path, allow_pickle=False) as saved:
+            if str(saved["signature"]) == signature and list(saved["fens"]) == fens:
+                retriever.set_embeddings(fens, saved["matrix"])
+                return "loaded"
+    matrix = agent.embed_batch(fens, list(indexed["ply"]))
+    retriever.set_embeddings(fens, matrix)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, signature=signature, fens=np.array(fens), matrix=matrix)
+    return "built"
+
+
+def index_path(splits: tuple[str, ...] | None) -> Path:
+    """`retrieval_train.npz` for the eval index, `retrieval_all.npz` for the app index."""
+    return config.PROCESSED_DIR / f"retrieval_{'all' if splits is None else '_'.join(splits)}.npz"
 
 
 class RandomRetriever:

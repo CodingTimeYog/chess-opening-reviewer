@@ -124,3 +124,39 @@ def test_network_embeddings_in_batch_match_single_positions_and_index_the_corpus
     hits = retriever.retrieve(fen_norm(unseen), k=4, ply=unseen.ply(), opening="ruy_lopez")
     assert len(hits) == 4 and all(-1.0 <= h.score <= 1.0001 for h in hits)
     assert [h.score for h in hits] == sorted((h.score for h in hits), reverse=True)
+
+
+def test_index_is_saved_and_reloaded_only_for_the_same_checkpoint(positions, tmp_path):
+    from chess_trainer.rag import load_or_build_index
+
+    class CountingAgent(PolicyAgent):
+        batches = 0
+
+        def embed_batch(self, fens, plies, batch_size=1024):
+            CountingAgent.batches += 1
+            return super().embed_batch(fens, plies, batch_size)
+
+    torch.manual_seed(0)
+    agent = CountingAgent(PolicyNet())
+    path = tmp_path / "retrieval_train.npz"
+    unseen = board_after("e4 e5 Nf3 Nc6 Bb5 f5")
+    query = dict(k=4, ply=unseen.ply(), opening="ruy_lopez")
+
+    built = Retriever(positions)
+    assert load_or_build_index(built, agent, path, signature="ckpt-a") == "built"
+    assert path.exists() and CountingAgent.batches == 1
+    expected = built.retrieve(fen_norm(unseen), **query)
+    assert len(expected) == 4
+
+    loaded = Retriever(positions)
+    assert load_or_build_index(loaded, agent, path, signature="ckpt-a") == "loaded"
+    assert CountingAgent.batches == 1  # nothing was re-embedded
+    assert loaded.retrieve(fen_norm(unseen), **query) == expected
+
+    # another checkpoint, or another set of indexed games, must not reuse the file
+    assert load_or_build_index(Retriever(positions), agent, path, signature="ckpt-b") == "built"
+    wider = positions_frame(
+        game_rows("strong", RUY_A, "train"), game_rows("new", "e4 e5 Nf3 Nc6 Bb5 f5", "train")
+    )
+    assert load_or_build_index(Retriever(wider), agent, path, signature="ckpt-b") == "built"
+    assert CountingAgent.batches == 3

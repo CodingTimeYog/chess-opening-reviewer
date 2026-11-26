@@ -22,7 +22,14 @@ import pandas as pd
 from chess_trainer import config
 from chess_trainer.data.openings import OPENINGS
 from chess_trainer.eval.quality import SAMPLE_PER_STRATUM, sample_positions
-from chess_trainer.rag import Hit, RandomRetriever, Retriever, index_embeddings
+from chess_trainer.rag import (
+    Hit,
+    RandomRetriever,
+    Retriever,
+    checkpoint_signature,
+    index_path,
+    load_or_build_index,
+)
 
 K = 5
 
@@ -118,7 +125,12 @@ def main() -> None:
         if not path.exists():
             path = config.CHECKPOINT_DIR / f"{args.checkpoint}.pt"
         retriever = Retriever(positions)
-        index_embeddings(retriever, PolicyAgent.from_checkpoint(path))
+        load_or_build_index(
+            retriever,
+            PolicyAgent.from_checkpoint(path),
+            index_path(("train",)),
+            checkpoint_signature(path),
+        )
         results["hybrid"] = evaluate_retrieval(retriever, sample)
 
     meta = {"split": args.split, "seed": args.seed, "git_sha": config.git_sha()}
