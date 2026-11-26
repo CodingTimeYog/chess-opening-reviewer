@@ -2,7 +2,7 @@
 .claude/
 
 # Data: raw PGNs, processed Parquet, engine cache (never committed)
-data/
+/data/
 
 # Python
 .venv/
