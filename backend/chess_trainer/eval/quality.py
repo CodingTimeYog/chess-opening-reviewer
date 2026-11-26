@@ -26,8 +26,8 @@ import pandas as pd
 from chess_trainer.agents.base import Agent
 from chess_trainer.config import SEED
 from chess_trainer.data.openings import OPENINGS, board_from
+from chess_trainer.engine import clipped_cp
 
-CP_CLIP = 1000
 BLUNDER_CPL = 100
 SAMPLE_PER_STRATUM = 500
 
@@ -110,13 +110,8 @@ def sample_positions(
     rows = rows.assign(stratum=rows["strict"].map({True: "strict", False: "seen"}))
     picked = rows.groupby(["opening", "stratum"], sort=True).head(n_per_stratum)
     columns = ["opening", "stratum", "fen_norm", "ply", "move_uci"]
+    columns += [extra for extra in ("eco", "game_id") if extra in picked.columns]
     return picked.sort_values(["opening", "stratum", "fen_norm"])[columns].reset_index(drop=True)
-
-
-def clipped_cp(cp: int | None, mate: int | None) -> int:
-    if mate is not None:
-        return CP_CLIP if mate > 0 else -CP_CLIP
-    return max(-CP_CLIP, min(CP_CLIP, cp))
 
 
 def _expectation(cp: int | None, mate: int | None, ply: int) -> float:

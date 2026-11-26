@@ -23,10 +23,24 @@ from chess_trainer.data.openings import OPENINGS, board_from
 from chess_trainer.data.repertoire import repertoire_moves
 
 MIN_OWN_MOVES = 10
+# HybridAgent.source() -> label in the report
+TIER_LABELS = {"book": "book", "repertoire": "prep", "policy": "resnet"}
 
 
 def _share(n: int, covered: int) -> dict:
     return {"n": n, "covered": covered, "pct": round(100 * covered / n, 2) if n else None}
+
+
+def _tiers(rows: pd.DataFrame) -> dict:
+    """Share of positions answered by each tier of a tiered agent."""
+    counts = rows["tier"].value_counts()
+    return {
+        "n": len(rows),
+        **{
+            label: round(100 * int(counts.get(label, 0)) / len(rows), 2) if len(rows) else None
+            for label in TIER_LABELS.values()
+        },
+    }
 
 
 def _depth(known: list[bool]) -> int:
@@ -59,16 +73,21 @@ def evaluate_coverage(
 
     # One agent call per distinct position, at the earliest ply it occurs.
     first_ply = rows.groupby("fen_norm")["ply"].min().to_dict()
-    in_book, known, in_prep = {}, {}, {}
+    in_book, known, in_prep, tier = {}, {}, {}, {}
+    tiered = hasattr(agent, "source")
     for fen, ply in first_ply.items():
         board = board_from(fen, ply)
         in_repertoire = repertoire_moves(tree, fen)
         in_book[fen] = not agent.is_fallback(board)
         known[fen] = in_book[fen] and agent.best(board) in theory.get(fen, set()) | in_repertoire
         in_prep[fen] = bool(in_repertoire)
+        if tiered:
+            tier[fen] = TIER_LABELS[agent.source(board)]
     rows["in_book"] = rows["fen_norm"].map(in_book)
     rows["known"] = rows["fen_norm"].map(known)
     rows["in_prep"] = rows["fen_norm"].map(in_prep)
+    if tiered:
+        rows["tier"] = rows["fen_norm"].map(tier)
 
     openings = {}
     for oid, opening in OPENINGS.items():
@@ -87,6 +106,8 @@ def evaluate_coverage(
             },
             "prep": _share(len(own_turns), int(own_turns["in_prep"].sum())),
         }
+        if tiered:
+            openings[oid]["tiers"] = {"all": _tiers(sub), "strict": _tiers(strict)}
     return {
         "metric": "opening_coverage",
         "agent": agent.name,
@@ -113,6 +134,23 @@ def metrics_markdown(metrics: dict) -> str:
     def cell(share: dict) -> str:
         return f"{_pct(share)} ({share['covered']:,} / {share['n']:,})"
 
+    def tier(subset: str, label: str):
+        return lambda m: (
+            "n/a" if m["tiers"][subset][label] is None else f"{m['tiers'][subset][label]:.1f}%"
+        )
+
+    tier_section = []
+    if all("tiers" in m for _, m in ops):
+        tier_section = [
+            "\n## Which tier answers (book, then prep repertoire, then ResNet)\n\n",
+            head,
+            *[
+                row(f"% {label}, {subset} positions", tier(subset, label))
+                for subset in ("all", "strict")
+                for label in TIER_LABELS.values()
+            ],
+        ]
+
     def depth(share: dict) -> str:
         return "n/a" if share["mean_depth"] is None else f"{share['mean_depth']:.2f}"
 
@@ -134,5 +172,6 @@ def metrics_markdown(metrics: dict) -> str:
             "\n## Prep coverage (repertoire side to move, prep tree has a repertoire move)\n\n",
             head,
             row("positions", lambda m: cell(m["prep"])),
+            *tier_section,
         ]
     )

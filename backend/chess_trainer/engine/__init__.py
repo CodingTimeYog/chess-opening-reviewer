@@ -4,6 +4,8 @@ A position is analysed once with MultiPV set to the number of legal moves, so th
 holds a score for each (fen_norm, move, depth). Any agent's move can then be scored
 without calling the engine again. Scores are from the side to move's point of view,
 stored as centipawns or mate distance exactly as Stockfish reports them.
+
+`LiveAnalyser` is the fast path for the UI: two short searches for one move.
 """
 
 import sqlite3
@@ -11,6 +13,7 @@ import sys
 import threading
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 
 import chess
@@ -18,6 +21,7 @@ import chess.engine
 
 from chess_trainer import config
 
+CP_CLIP = 1000
 Score = tuple[int | None, int | None]  # (centipawns, mate in n); exactly one is set
 MoveEvals = dict[str, Score]
 
@@ -31,6 +35,11 @@ class EvalCache:
             "CREATE TABLE IF NOT EXISTS evals ("
             "fen TEXT NOT NULL, move TEXT NOT NULL, depth INTEGER NOT NULL, "
             "cp INTEGER, mate INTEGER, PRIMARY KEY (fen, move, depth))"
+        )
+        self._db.execute(
+            "CREATE TABLE IF NOT EXISTS live ("
+            "fen TEXT NOT NULL, move TEXT NOT NULL, depth INTEGER NOT NULL, "
+            "cp INTEGER, mate INTEGER, best INTEGER NOT NULL, PRIMARY KEY (fen, move, depth))"
         )
 
     def get(self, fen: str, depth: int) -> MoveEvals | None:
@@ -48,8 +57,96 @@ class EvalCache:
                 [(fen, move, depth, cp, mate) for move, (cp, mate) in evals.items()],
             )
 
+    # Live analysis stores single moves, so it has its own table: a position in `evals`
+    # is always complete, a position in `live` holds only the moves that were searched.
+    def get_live(self, fen: str, depth: int) -> dict[str, tuple[Score, bool]]:
+        rows = self._db.execute(
+            "SELECT move, cp, mate, best FROM live WHERE fen = ? AND depth = ?", (fen, depth)
+        ).fetchall()
+        return {move: ((cp, mate), bool(best)) for move, cp, mate, best in rows}
+
+    def put_live(self, fen: str, depth: int, move: str, score: Score, best: bool) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT OR REPLACE INTO live VALUES (?, ?, ?, ?, ?, ?)",
+                (fen, move, depth, score[0], score[1], int(best)),
+            )
+
     def close(self) -> None:
         self._db.close()
+
+
+def clipped_cp(cp: int | None, mate: int | None) -> int:
+    """Centipawns bounded to +/-CP_CLIP; a mate counts as the bound."""
+    if mate is not None:
+        return CP_CLIP if mate > 0 else -CP_CLIP
+    return max(-CP_CLIP, min(CP_CLIP, cp))
+
+
+@dataclass(frozen=True)
+class MoveAnalysis:
+    """Engine verdict on one move: the best move and both scores, mover's point of view."""
+
+    best_move: str
+    best: Score
+    played: Score
+
+    @property
+    def cp_loss(self) -> int:
+        return max(0, clipped_cp(*self.best) - clipped_cp(*self.played))
+
+
+class LiveAnalyser:
+    """Fast feedback on a single move: one search for the best move and one restricted to
+    the move played, instead of scoring every legal move. Results are cached by
+    (fen_norm, move, depth). A position already fully analysed offline needs no search."""
+
+    def __init__(
+        self,
+        cache: EvalCache | None = None,
+        depth: int = config.ENGINE_DEPTH,
+        stockfish_path: Path | None = None,
+        use_full_cache: bool = True,
+        engine: chess.engine.SimpleEngine | None = None,
+    ) -> None:
+        self.cache = cache or EvalCache()
+        self.depth = depth
+        self.use_full_cache = use_full_cache
+        self._path = str(stockfish_path or config.STOCKFISH_PATH)
+        self._engine = engine
+
+    def _search(self, board: chess.Board, move: chess.Move | None) -> tuple[str, Score]:
+        if self._engine is None:
+            self._engine = chess.engine.SimpleEngine.popen_uci(self._path)
+            self._engine.configure({"Threads": 1, "Hash": 32})
+        limit = chess.engine.Limit(depth=self.depth)
+        root_moves = [move] if move is not None else None
+        info = self._engine.analyse(board, limit, root_moves=root_moves, game=object())
+        return info["pv"][0].uci(), _score(info, board.turn)
+
+    def analyse(self, board: chess.Board, move: chess.Move) -> MoveAnalysis:
+        fen, uci = board.epd(), move.uci()
+        if self.use_full_cache:
+            full = self.cache.get(fen, self.depth)
+            if full and uci in full:
+                best = max(sorted(full), key=lambda m: clipped_cp(*full[m]))
+                return MoveAnalysis(best, full[best], full[uci])
+        live = self.cache.get_live(fen, self.depth)
+        best = next((m for m, (_, is_best) in live.items() if is_best), None)
+        if best is None:
+            best, score = self._search(board, None)
+            self.cache.put_live(fen, self.depth, best, score, best=True)
+            live[best] = (score, True)
+        if uci not in live:
+            _, score = self._search(board, move)
+            self.cache.put_live(fen, self.depth, uci, score, best=False)
+            live[uci] = (score, False)
+        return MoveAnalysis(best, live[best][0], live[uci][0])
+
+    def close(self) -> None:
+        if self._engine is not None:
+            self._engine.quit()
+            self._engine = None
 
 
 def _score(info: chess.engine.InfoDict, turn: chess.Color) -> Score:

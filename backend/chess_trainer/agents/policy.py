@@ -7,9 +7,15 @@ import numpy as np
 import torch
 
 from chess_trainer.agents.base import Agent
-from chess_trainer.agents.encoding import encode_board, legal_indices
+from chess_trainer.agents.encoding import (
+    encode_bitboards,
+    encode_board,
+    legal_indices,
+    planes_from_bitboards,
+)
 from chess_trainer.agents.model import PolicyNet, legal_logits
 from chess_trainer.config import SEED
+from chess_trainer.data.openings import board_from
 
 TOP_K = 5
 
@@ -56,6 +62,18 @@ class PolicyAgent(Agent):
     def embed(self, board: chess.Board) -> np.ndarray:
         """Pooled trunk features, used for nearest-neighbour retrieval."""
         return self._forward(board)[1]
+
+    def embed_batch(self, fens: list[str], plies: list[int], batch_size: int = 1024) -> np.ndarray:
+        """Embeddings of many positions at once: (N, channels) float32."""
+        bitboards = np.stack([encode_bitboards(board_from(fen)) for fen in fens])
+        plies = np.asarray(plies)
+        chunks = []
+        with torch.no_grad():
+            for start in range(0, len(fens), batch_size):
+                stop = start + batch_size
+                planes = planes_from_bitboards(bitboards[start:stop], plies[start:stop])
+                chunks.append(self.model(torch.from_numpy(planes)).features.numpy())
+        return np.concatenate(chunks)
 
     def choose(self, board: chess.Board, temperature: float = 1.0) -> chess.Move:
         """Sample among the top-k moves for variety. Temperature 0 picks the best move."""
