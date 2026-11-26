@@ -1,6 +1,6 @@
 # Retrieval relevance, test split
 
-Git `8c86664`, seed 0. Index: train games only. Definitions are in `chess_trainer/eval/retrieval.py`.
+Git `cefc8b2`, seed 0. Index: train games only. Definitions are in `chess_trainer/eval/retrieval.py`.
 
 | | Ruy Lopez, seen | Ruy Lopez, strict | Sicilian Taimanov, seen | Sicilian Taimanov, strict |
 |---|---:|---:|---:|---:|
@@ -11,3 +11,6 @@ Git `8c86664`, seed 0. Index: train games only. Definitions are in `chess_traine
 | precision@5, exact | 79.8% | 0.0% | 78.4% | 0.0% |
 | MRR, exact | 1.000 | 0.000 | 1.000 | 0.000 |
 | mean games returned, exact | 3.99 | 0.00 | 3.92 | 0.00 |
+| precision@5, hybrid | 81.8% | 3.6% | 81.0% | 4.2% |
+| MRR, hybrid | 1.000 | 0.074 | 1.000 | 0.082 |
+| mean games returned, hybrid | 5.00 | 5.00 | 5.00 | 5.00 |
