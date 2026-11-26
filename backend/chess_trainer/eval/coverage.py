@@ -19,14 +19,10 @@ import pandas as pd
 
 from chess_trainer.agents.base import Agent
 from chess_trainer.config import SEED
-from chess_trainer.data.openings import OPENINGS
+from chess_trainer.data.openings import OPENINGS, board_from
 from chess_trainer.data.repertoire import repertoire_moves
 
 MIN_OWN_MOVES = 10
-
-
-def _board(fen: str) -> chess.Board:
-    return chess.Board(f"{fen} 0 1")
 
 
 def _share(n: int, covered: int) -> dict:
@@ -61,10 +57,11 @@ def evaluate_coverage(
     theory = train.groupby("fen_norm")["move_uci"].agg(set).to_dict()
     rows = positions[positions["split"] == split].copy()
 
-    # One agent call per distinct position.
+    # One agent call per distinct position, at the earliest ply it occurs.
+    first_ply = rows.groupby("fen_norm")["ply"].min().to_dict()
     in_book, known, in_prep = {}, {}, {}
-    for fen in rows["fen_norm"].unique():
-        board = _board(fen)
+    for fen, ply in first_ply.items():
+        board = board_from(fen, ply)
         in_repertoire = repertoire_moves(tree, fen)
         in_book[fen] = not agent.is_fallback(board)
         known[fen] = in_book[fen] and agent.best(board) in theory.get(fen, set()) | in_repertoire

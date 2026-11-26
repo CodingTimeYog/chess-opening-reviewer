@@ -25,15 +25,11 @@ import pandas as pd
 
 from chess_trainer.agents.base import Agent
 from chess_trainer.config import SEED
-from chess_trainer.data.openings import OPENINGS
+from chess_trainer.data.openings import OPENINGS, board_from
 
 CP_CLIP = 1000
 BLUNDER_CPL = 100
 SAMPLE_PER_STRATUM = 500
-
-
-def _board(fen: str) -> chess.Board:
-    return chess.Board(f"{fen} 0 1")
 
 
 def _pct(hits: float, n: int) -> float | None:
@@ -64,13 +60,14 @@ def top_move(policy: dict[str, float], fen: str, seed: int = SEED) -> str:
 
 def agreement(agent: Agent, positions: pd.DataFrame, split: str = "test") -> dict:
     rows = positions[positions["split"] == split]
+    first_ply = rows.groupby("fen_norm")["ply"].min().to_dict()
     policies: dict[str, dict[str, float]] = {}
     legal: dict[str, set[str]] = {}
     sanity = {"illegal_moves": 0, "bad_distributions": 0, "illegal_master_moves": 0}
     hit1, hit3 = [], []
     for fen, master in zip(rows["fen_norm"], rows["move_uci"], strict=True):
         if fen not in policies:
-            board = _board(fen)
+            board = board_from(fen, first_ply[fen])  # earliest ply the position occurs
             policies[fen] = agent.policy(board)
             legal[fen] = {move.uci() for move in board.legal_moves}
         policy = policies[fen]
@@ -149,7 +146,7 @@ def _summary(cpl: list[float], wdl: list[float], blunder: list[float]) -> dict:
 def engine_quality(agent: Agent, sample: pd.DataFrame, evals: dict, seed: int = SEED) -> dict:
     records = []
     for row in sample.itertuples():
-        board = _board(row.fen_norm)
+        board = board_from(row.fen_norm, row.ply)
         policy = agent.policy(board)
         losses = _losses(evals[row.fen_norm], row.ply)
         top = losses[top_move(policy, row.fen_norm, seed)]
