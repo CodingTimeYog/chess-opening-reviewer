@@ -1,0 +1,1869 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Chess Opening Reviewer",
+    "description": "Opening trainer: play a repertoire against a learned agent, with engine-checked feedback grounded in retrieved master games.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/openings": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Openings",
+        "description": "Openings the user can train.",
+        "operationId": "openings_openings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Opening"
+                  },
+                  "type": "array",
+                  "title": "Response Openings Openings Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Agents",
+        "description": "Agents available as opponents, and whether the LLM rewrite is on.",
+        "operationId": "agents_agents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agents"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/games": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Create Game",
+        "description": "Start a session. In play mode the agent moves first if it is its turn.",
+        "operationId": "create_game_games_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GameCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request; `detail` says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IllegalMove"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown id."
+          },
+          "409": {
+            "description": "Not allowed in the game's current state."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/games/{game_id}": {
+      "get": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Get Game",
+        "description": "Full state: moves with feedback, events, legal moves.",
+        "operationId": "get_game_games__game_id__get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request; `detail` says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IllegalMove"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown id."
+          },
+          "409": {
+            "description": "Not allowed in the game's current state."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/games/{game_id}/moves": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Post Move",
+        "description": "Play the user's move. Returns its feedback, any events, and the agent's reply.\nAn illegal move is a 400 whose `detail.legal_moves` lists what can be played.",
+        "operationId": "post_move_games__game_id__moves_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request; `detail` says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IllegalMove"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown id."
+          },
+          "409": {
+            "description": "Not allowed in the game's current state."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/games/{game_id}/agent-move": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Post Agent Move",
+        "description": "Watch mode: let the agents play the next `plies` half-moves.",
+        "operationId": "post_agent_move_games__game_id__agent_move_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "plies",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 80,
+              "minimum": 1,
+              "default": 1,
+              "title": "Plies"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentMoveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request; `detail` says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IllegalMove"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown id."
+          },
+          "409": {
+            "description": "Not allowed in the game's current state."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/games/{game_id}/reset": {
+      "post": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Reset Game",
+        "description": "Restart the session with the same settings and id.",
+        "operationId": "reset_game_games__game_id__reset_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request; `detail` says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IllegalMove"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown id."
+          },
+          "409": {
+            "description": "Not allowed in the game's current state."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/games/{game_id}/review": {
+      "get": {
+        "tags": [
+          "games"
+        ],
+        "summary": "Review",
+        "description": "Per-move centipawn loss and feedback for every analysed move, with a summary.",
+        "operationId": "review_games__game_id__review_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Review"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request; `detail` says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IllegalMove"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown id."
+          },
+          "409": {
+            "description": "Not allowed in the game's current state."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/positions/retrieve": {
+      "get": {
+        "tags": [
+          "positions"
+        ],
+        "summary": "Retrieve",
+        "description": "Master games that reached this position, and games from similar positions.",
+        "operationId": "retrieve_positions_retrieve_get",
+        "parameters": [
+          {
+            "name": "fen",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Full FEN or the 4-field normalised FEN.",
+              "title": "Fen"
+            },
+            "description": "Full FEN or the 4-field normalised FEN."
+          },
+          {
+            "name": "k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 5,
+              "title": "K"
+            }
+          },
+          {
+            "name": "opening",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict similar games to an opening.",
+              "title": "Opening"
+            },
+            "description": "Restrict similar games to an opening."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Retrieval"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request; `detail` says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IllegalMove"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown id."
+          },
+          "409": {
+            "description": "Not allowed in the game's current state."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/positions/analyze": {
+      "get": {
+        "tags": [
+          "positions"
+        ],
+        "summary": "Analyze",
+        "description": "Engine best move and eval, the book's and the network's top moves, repertoire moves.",
+        "operationId": "analyze_positions_analyze_get",
+        "parameters": [
+          {
+            "name": "fen",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Full FEN or the 4-field normalised FEN.",
+              "title": "Fen"
+            },
+            "description": "Full FEN or the 4-field normalised FEN."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Analysis"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request; `detail` says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IllegalMove"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown id."
+          },
+          "409": {
+            "description": "Not allowed in the game's current state."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/master-games/{game_id}": {
+      "get": {
+        "tags": [
+          "positions"
+        ],
+        "summary": "Master Game",
+        "description": "Metadata and full PGN of a master game, for the embedded viewer.",
+        "operationId": "master_game_master_games__game_id__get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterGame"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request; `detail` says why.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IllegalMove"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown id."
+          },
+          "409": {
+            "description": "Not allowed in the game's current state."
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AgentMoveResponse": {
+        "properties": {
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/MoveRecord"
+            },
+            "type": "array",
+            "title": "Moves"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "state": {
+            "$ref": "#/components/schemas/GameState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "moves",
+          "events",
+          "state"
+        ],
+        "title": "AgentMoveResponse"
+      },
+      "Agents": {
+        "properties": {
+          "agents": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Agents"
+          },
+          "default": {
+            "type": "string",
+            "title": "Default"
+          },
+          "llm": {
+            "type": "boolean",
+            "title": "Llm",
+            "description": "True when the optional LLM rewrite is switched on."
+          }
+        },
+        "type": "object",
+        "required": [
+          "agents",
+          "default",
+          "llm"
+        ],
+        "title": "Agents"
+      },
+      "Analysis": {
+        "properties": {
+          "fen": {
+            "type": "string",
+            "title": "Fen"
+          },
+          "best": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Best"
+          },
+          "eval_cp": {
+            "type": "integer",
+            "title": "Eval Cp",
+            "description": "Side to move's point of view, clipped to +/-1000."
+          },
+          "book": {
+            "$ref": "#/components/schemas/BookView"
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolicyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repertoire": {
+            "items": {
+              "$ref": "#/components/schemas/RepertoireMove"
+            },
+            "type": "array",
+            "title": "Repertoire"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fen",
+          "best",
+          "eval_cp",
+          "book",
+          "policy",
+          "repertoire"
+        ],
+        "title": "Analysis"
+      },
+      "BookView": {
+        "properties": {
+          "in_book": {
+            "type": "boolean",
+            "title": "In Book"
+          },
+          "games": {
+            "type": "integer",
+            "title": "Games"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/MoveProb"
+            },
+            "type": "array",
+            "title": "Moves"
+          }
+        },
+        "type": "object",
+        "required": [
+          "in_book",
+          "games",
+          "moves"
+        ],
+        "title": "BookView"
+      },
+      "Citation": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "white": {
+            "type": "string",
+            "title": "White"
+          },
+          "black": {
+            "type": "string",
+            "title": "Black"
+          },
+          "white_elo": {
+            "type": "integer",
+            "title": "White Elo"
+          },
+          "black_elo": {
+            "type": "integer",
+            "title": "Black Elo"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "event": {
+            "type": "string",
+            "title": "Event"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "move_uci": {
+            "type": "string",
+            "title": "Move Uci"
+          },
+          "move_san": {
+            "type": "string",
+            "title": "Move San"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "white",
+          "black",
+          "white_elo",
+          "black_elo",
+          "year",
+          "event",
+          "result",
+          "move_uci",
+          "move_san"
+        ],
+        "title": "Citation"
+      },
+      "Event": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "left_repertoire",
+              "left_book",
+              "eval_swing",
+              "castled",
+              "queens_off",
+              "minor_piece_trade",
+              "structure_shift",
+              "opening_end"
+            ],
+            "title": "Type"
+          },
+          "ply": {
+            "type": "integer",
+            "title": "Ply"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "info",
+              "inaccuracy",
+              "mistake",
+              "blunder"
+            ],
+            "title": "Severity"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "white",
+              "black"
+            ],
+            "title": "Side"
+          },
+          "feedback": {
+            "$ref": "#/components/schemas/EventFeedback"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "ply",
+          "severity",
+          "side",
+          "feedback"
+        ],
+        "title": "Event"
+      },
+      "EventFeedback": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "facts": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Facts"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "facts",
+          "citations"
+        ],
+        "title": "EventFeedback"
+      },
+      "Feedback": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "Deterministic template text."
+          },
+          "llm_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Llm Text",
+            "description": "LLM rewrite; null unless switched on."
+          },
+          "facts": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Facts",
+            "description": "Structured facts the text was built from."
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations",
+            "description": "Master games that reached this exact position."
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "facts",
+          "citations"
+        ],
+        "title": "Feedback"
+      },
+      "GameCreate": {
+        "properties": {
+          "opening_id": {
+            "type": "string",
+            "title": "Opening Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "play",
+              "watch"
+            ],
+            "title": "Mode",
+            "description": "play: user against an agent. watch: agent against agent.",
+            "default": "play"
+          },
+          "agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent",
+            "description": "Opponent in play mode. Default: see GET /agents."
+          },
+          "user_color": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "white",
+                  "black"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Color",
+            "description": "Play mode only. Default: the opening's."
+          },
+          "white_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "White Agent",
+            "description": "Watch mode. Default: `agent`."
+          },
+          "black_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Black Agent",
+            "description": "Watch mode. Default: `agent`."
+          },
+          "start": {
+            "type": "string",
+            "enum": [
+              "root",
+              "initial"
+            ],
+            "title": "Start",
+            "description": "root: begin at the opening's root position. initial: move one.",
+            "default": "root"
+          },
+          "temperature": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Temperature",
+            "description": "Agent sampling temperature; 0 always plays the top move.",
+            "default": 1.0
+          },
+          "analyse_agent_moves": {
+            "type": "boolean",
+            "title": "Analyse Agent Moves",
+            "description": "Also run the engine on agent moves (slower; mainly for watch mode).",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "opening_id"
+        ],
+        "title": "GameCreate"
+      },
+      "GameState": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "opening_id": {
+            "type": "string",
+            "title": "Opening Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "play",
+              "watch"
+            ],
+            "title": "Mode"
+          },
+          "start": {
+            "type": "string",
+            "enum": [
+              "root",
+              "initial"
+            ],
+            "title": "Start"
+          },
+          "user_color": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "white",
+                  "black"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Color"
+          },
+          "agents": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "propertyNames": {
+              "enum": [
+                "white",
+                "black"
+              ]
+            },
+            "type": "object",
+            "title": "Agents"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "opening_over",
+              "game_over"
+            ],
+            "title": "Status"
+          },
+          "fen": {
+            "type": "string",
+            "title": "Fen"
+          },
+          "ply": {
+            "type": "integer",
+            "title": "Ply"
+          },
+          "turn": {
+            "type": "string",
+            "enum": [
+              "white",
+              "black"
+            ],
+            "title": "Turn"
+          },
+          "legal_moves": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Legal Moves",
+            "description": "UCI; empty once the game is no longer active."
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/MoveRecord"
+            },
+            "type": "array",
+            "title": "Moves"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "pgn": {
+            "type": "string",
+            "title": "Pgn",
+            "description": "Movetext so far."
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "opening_id",
+          "mode",
+          "start",
+          "user_color",
+          "agents",
+          "status",
+          "fen",
+          "ply",
+          "turn",
+          "legal_moves",
+          "moves",
+          "events",
+          "pgn"
+        ],
+        "title": "GameState"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Hit": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "description": "1.0 for an exact match, else cosine similarity."
+          },
+          "exact": {
+            "type": "boolean",
+            "title": "Exact"
+          },
+          "fen_norm": {
+            "type": "string",
+            "title": "Fen Norm",
+            "description": "The indexed position that matched."
+          },
+          "ply": {
+            "type": "integer",
+            "title": "Ply"
+          },
+          "move_uci": {
+            "type": "string",
+            "title": "Move Uci",
+            "description": "The move the master played from that position."
+          },
+          "opening": {
+            "type": "string",
+            "title": "Opening"
+          },
+          "eco": {
+            "type": "string",
+            "title": "Eco"
+          },
+          "white": {
+            "type": "string",
+            "title": "White"
+          },
+          "black": {
+            "type": "string",
+            "title": "Black"
+          },
+          "white_elo": {
+            "type": "integer",
+            "title": "White Elo"
+          },
+          "black_elo": {
+            "type": "integer",
+            "title": "Black Elo"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "event": {
+            "type": "string",
+            "title": "Event"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "score",
+          "exact",
+          "fen_norm",
+          "ply",
+          "move_uci",
+          "opening",
+          "eco",
+          "white",
+          "black",
+          "white_elo",
+          "black_elo",
+          "year",
+          "event",
+          "result"
+        ],
+        "title": "Hit"
+      },
+      "IllegalMove": {
+        "properties": {
+          "error": {
+            "type": "string",
+            "title": "Error"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "legal_moves": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Legal Moves",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "IllegalMove"
+      },
+      "MasterGame": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "opening": {
+            "type": "string",
+            "title": "Opening"
+          },
+          "eco": {
+            "type": "string",
+            "title": "Eco"
+          },
+          "white": {
+            "type": "string",
+            "title": "White"
+          },
+          "black": {
+            "type": "string",
+            "title": "Black"
+          },
+          "white_elo": {
+            "type": "integer",
+            "title": "White Elo"
+          },
+          "black_elo": {
+            "type": "integer",
+            "title": "Black Elo"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "event": {
+            "type": "string",
+            "title": "Event"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "pgn": {
+            "type": "string",
+            "title": "Pgn"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "opening",
+          "eco",
+          "white",
+          "black",
+          "white_elo",
+          "black_elo",
+          "year",
+          "event",
+          "result",
+          "pgn"
+        ],
+        "title": "MasterGame"
+      },
+      "MoveIn": {
+        "properties": {
+          "uci": {
+            "type": "string",
+            "title": "Uci",
+            "examples": [
+              "b5a4"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "uci"
+        ],
+        "title": "MoveIn"
+      },
+      "MoveProb": {
+        "properties": {
+          "uci": {
+            "type": "string",
+            "title": "Uci"
+          },
+          "san": {
+            "type": "string",
+            "title": "San"
+          },
+          "prob": {
+            "type": "number",
+            "title": "Prob"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uci",
+          "san",
+          "prob"
+        ],
+        "title": "MoveProb"
+      },
+      "MoveRecord": {
+        "properties": {
+          "ply": {
+            "type": "integer",
+            "title": "Ply",
+            "description": "Half-moves played before this move; 0 is White's first."
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "white",
+              "black"
+            ],
+            "title": "Side"
+          },
+          "uci": {
+            "type": "string",
+            "title": "Uci"
+          },
+          "san": {
+            "type": "string",
+            "title": "San"
+          },
+          "by": {
+            "type": "string",
+            "enum": [
+              "setup",
+              "user",
+              "agent"
+            ],
+            "title": "By"
+          },
+          "agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier",
+            "description": "Hybrid agent only: book, repertoire or policy answered."
+          },
+          "fen": {
+            "type": "string",
+            "title": "Fen",
+            "description": "Position after the move."
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Feedback"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for setup moves."
+          },
+          "similar_games": {
+            "items": {
+              "$ref": "#/components/schemas/Hit"
+            },
+            "type": "array",
+            "title": "Similar Games",
+            "description": "Games from similar positions (never exact matches)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "ply",
+          "side",
+          "uci",
+          "san",
+          "by",
+          "fen"
+        ],
+        "title": "MoveRecord"
+      },
+      "MoveResponse": {
+        "properties": {
+          "move": {
+            "$ref": "#/components/schemas/MoveRecord"
+          },
+          "agent_reply": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoveRecord"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            },
+            "type": "array",
+            "title": "Events",
+            "description": "Events from the user move and the agent reply."
+          },
+          "state": {
+            "$ref": "#/components/schemas/GameState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "move",
+          "agent_reply",
+          "events",
+          "state"
+        ],
+        "title": "MoveResponse"
+      },
+      "Opening": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "user_color": {
+            "type": "string",
+            "enum": [
+              "white",
+              "black"
+            ],
+            "title": "User Color",
+            "description": "The side whose repertoire this is."
+          },
+          "root_moves": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Root Moves",
+            "description": "SAN moves leading to the opening's root position."
+          },
+          "root_fen": {
+            "type": "string",
+            "title": "Root Fen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "user_color",
+          "root_moves",
+          "root_fen"
+        ],
+        "title": "Opening"
+      },
+      "PolicyView": {
+        "properties": {
+          "agent": {
+            "type": "string",
+            "title": "Agent"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/MoveProb"
+            },
+            "type": "array",
+            "title": "Moves"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent",
+          "moves"
+        ],
+        "title": "PolicyView"
+      },
+      "RepertoireMove": {
+        "properties": {
+          "uci": {
+            "type": "string",
+            "title": "Uci"
+          },
+          "san": {
+            "type": "string",
+            "title": "San"
+          },
+          "comment": {
+            "type": "string",
+            "title": "Comment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uci",
+          "san",
+          "comment"
+        ],
+        "title": "RepertoireMove"
+      },
+      "Retrieval": {
+        "properties": {
+          "fen": {
+            "type": "string",
+            "title": "Fen"
+          },
+          "exact": {
+            "items": {
+              "$ref": "#/components/schemas/Hit"
+            },
+            "type": "array",
+            "title": "Exact"
+          },
+          "similar": {
+            "items": {
+              "$ref": "#/components/schemas/Hit"
+            },
+            "type": "array",
+            "title": "Similar"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fen",
+          "exact",
+          "similar"
+        ],
+        "title": "Retrieval"
+      },
+      "Review": {
+        "properties": {
+          "game_id": {
+            "type": "string",
+            "title": "Game Id"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReviewSummary"
+          },
+          "moves": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewMove"
+            },
+            "type": "array",
+            "title": "Moves",
+            "description": "Every move the engine analysed."
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "game_id",
+          "summary",
+          "moves",
+          "events"
+        ],
+        "title": "Review"
+      },
+      "ReviewMove": {
+        "properties": {
+          "ply": {
+            "type": "integer",
+            "title": "Ply"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "white",
+              "black"
+            ],
+            "title": "Side"
+          },
+          "uci": {
+            "type": "string",
+            "title": "Uci"
+          },
+          "san": {
+            "type": "string",
+            "title": "San"
+          },
+          "by": {
+            "type": "string",
+            "title": "By"
+          },
+          "classification": {
+            "type": "string",
+            "title": "Classification"
+          },
+          "cp_loss": {
+            "type": "integer",
+            "title": "Cp Loss"
+          },
+          "best_san": {
+            "type": "string",
+            "title": "Best San"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ply",
+          "side",
+          "uci",
+          "san",
+          "by",
+          "classification",
+          "cp_loss",
+          "best_san",
+          "text"
+        ],
+        "title": "ReviewMove"
+      },
+      "ReviewSummary": {
+        "properties": {
+          "analysed": {
+            "type": "integer",
+            "title": "Analysed"
+          },
+          "mean_cp_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Cp Loss"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "analysed",
+          "mean_cp_loss",
+          "counts"
+        ],
+        "title": "ReviewSummary"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

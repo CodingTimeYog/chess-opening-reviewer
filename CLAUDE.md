@@ -131,17 +131,20 @@ move. Events, each with a structured payload:
 - `castled`, `queens_off`, `minor_piece_trade`
 - `opening_end` (ply cap or book exhaustion), which triggers the full-game review
 
-Built: `left_repertoire`, `left_book`, `eval_swing`, `opening_end`. Deferred until the API
-is up: `structure_shift`, `castled`, `queens_off`, `minor_piece_trade`.
+All eight are built. `minor_piece_trade` fires when a minor piece is captured on the move
+right after another one was; `queens_off` fires once per game.
 
 **Feedback (`chess_trainer.feedback`):** two layers.
 1. **Template layer** (always on): deterministic text from the structured facts:
    classification, cp loss, engine best move, most common GM move, repertoire move if any,
    the prep author's comment, and up to 3 cited games. Citations are only ever games that
    reached the exact position. This is the ground truth for the correctness metric.
-2. **LLM layer** (optional, `--llm ollama`): local Ollama model rewrites the template facts
-   into prose explaining the idea. It receives only the structured JSON and must cite
-   nothing outside it. Model: `qwen2.5:3b` (pull on first use). No paid APIs.
+2. **LLM layer** (optional, off by default): local Ollama model rewrites the template facts
+   into prose explaining the idea. It receives only the structured JSON and the template
+   text and must cite nothing outside them. Model: `qwen2.5:3b` (`ollama pull` it first).
+   No paid APIs. Switched on for the API with `CHESS_TRAINER_LLM=ollama` and for the
+   feedback eval with `--llm ollama`; the template text is always returned alongside, and
+   is what the user sees if Ollama is unreachable.
 
 ## 6. Evaluation harness (`chess_trainer.eval`)
 
@@ -164,20 +167,30 @@ Headline experiment: book vs policy on strict held-out positions, plus ablations
 
 ## 7. Backend API (FastAPI, `chess_trainer.api`)
 
-Serves on `localhost:8000`, OpenAPI at `/docs`, schema exported to `web/src/api/openapi.json`.
+`uv run uvicorn chess_trainer.api.app:create_app --factory --port 8000`. Serves on
+`localhost:8000`, interactive docs at `/docs`. The contract is documented in `docs/API.md`
+and exported to `web/src/api/openapi.json` with `python -m chess_trainer.api.export`.
+Sessions are in memory. CORS allows the local React dev server (ports 5173 and 3000).
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/openings` | repertoire roots the user can pick |
-| POST | `/games` | new game `{opening_id, user_color, agent}` returns `{game_id, fen}` |
-| POST | `/games/{id}/moves` | user move `{uci}` returns `{fen, legal_moves, events[], agent_reply?}` |
-| GET | `/games/{id}` | full state: moves, annotations, events |
-| GET | `/games/{id}/review` | post-game review: per-move cp loss plus feedback |
-| GET | `/positions/retrieve?fen=&k=` | retrieved master games with PGN |
-| GET | `/positions/analyze?fen=` | engine eval, best move, book and policy distributions |
+| GET | `/openings`, `/agents` | repertoire roots; available opponents (`book`, `hybrid`, `resnet_main`) |
+| POST | `/games` | new session `{opening_id, mode: play or watch, agent, user_color, start, temperature}`; returns the full state, with the agent's first move already played if it is to move |
+| POST | `/games/{id}/moves` | user move `{uci}` returns `{move, agent_reply, events[], state}`; an illegal move is a 400 listing the legal moves |
+| POST | `/games/{id}/agent-move?plies=` | watch mode: advance agent vs agent |
+| POST | `/games/{id}/reset` | restart with the same settings |
+| GET | `/games/{id}` | full state: moves with feedback, events, legal moves |
+| GET | `/games/{id}/review` | per-move cp loss plus feedback, and a summary |
+| GET | `/positions/retrieve?fen=&k=&opening=` | exact-match and similar master games |
+| GET | `/positions/analyze?fen=` | engine eval, best move, book and policy distributions, repertoire moves |
+| GET | `/master-games/{game_id}` | metadata and full PGN of a master game |
 
-Events in move responses carry `{type, ply, severity, feedback: {text, facts, citations}}`.
-The frontend never calls Stockfish or Ollama directly.
+A session starts at the opening's root position by default (the book mixes both openings
+before the roots, so starting from move one can leave the chosen opening). Each move record
+carries `feedback: {text, llm_text, facts, citations}` and `similar_games`. Events carry
+`{type, ply, severity, side, feedback: {text, facts, citations}}`. Only user moves are
+engine-checked unless the session asks otherwise. The frontend never calls Stockfish or
+Ollama directly.
 
 ## 8. Repo layout and ownership
 
