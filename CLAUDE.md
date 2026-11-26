@@ -102,7 +102,10 @@ PGN for the embedded viewer. At equal score the game with the higher average rat
 year.
 
 **Engine (`chess_trainer.engine`):** Stockfish via python-chess UCI. Depth 14, one
-thread per analysis, cached by `fen_norm` in `data/cache/engine.sqlite`.
+thread per analysis, several engines in parallel. A position is analysed once with MultiPV
+equal to its number of legal moves, and every move's score is cached by
+`(fen_norm, move, depth)` in `data/cache/engine.sqlite`, so scoring a new agent or
+checkpoint on already-analysed positions needs no engine calls.
 Path from `STOCKFISH_PATH`; default
 `C:/Users/aswin/Desktop/Chess_Engines/stockfish/stockfish-windows-x86-64-avx2.exe`.
 
@@ -133,7 +136,7 @@ opening separately, on all positions and on the strict subset. Plots via
 | Metric | Definition |
 |---|---|
 | Opening coverage | % held-out positions with a non-fallback move; % test lines, replayed along the master moves, where the agent's first 10 own moves are all non-fallback and its top move is theory (played from that position in train, or in repertoire). Lines with fewer than 10 own moves are excluded. Reported with the agent on each side |
-| Move quality | mean/median centipawn loss vs Stockfish best; top-1/top-3 agreement with the GM move; top-1 agreement with Stockfish top-3 |
+| Move quality | On every held-out position: top-1/top-3 agreement with the GM move (policy ties scored as the expected hit under a random tie-break) plus legal-move sanity checks. On a seeded sample of distinct positions, 500 seen + 500 strict per opening: mean/median centipawn loss vs Stockfish best (scores clipped to +/-1000 cp), blunder rate (CPL >= 100), and WDL expectation loss. Reported for the agent's top move, for sampling from its policy, and for the GM move as reference |
 | Retrieval relevance | precision@5 and MRR; relevant = retrieved game reaches the exact position, or shares ECO and the next GM move |
 | Feedback correctness | on a labeled set of (position, player move) with engine ground truth: classification accuracy, best move named correctly, zero hallucinated citations (every cited game exists in the corpus and reached the position) |
 
