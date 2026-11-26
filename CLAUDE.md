@@ -87,10 +87,11 @@ Out of book: uniform random legal move, and `fallback=True` is recorded. This is
 - Objective: cross-entropy vs the GM move, with per-sample weight 1.0 for the winner's
   moves, 0.75 for draws, 0.5 for the loser's moves (ablation: unweighted).
 - Auxiliary value head (tanh, predicts result) with 0.25 loss weight. Ablation: off.
-- Training: `uv run python -m chess_trainer.agents.train --name resnet_main`. AdamW
-  (lr 1e-3, weight decay 1e-4), batch 256, cosine LR, at most 10 epochs, early stop after
-  2 epochs without a val top-1 gain. Best checkpoint by val top-1 goes to
-  `data/checkpoints/<name>.pt` (gitignored). PyTorch CPU; university cluster is the
+- Training: `uv run python -m chess_trainer.agents.train --name resnet_main --resume`.
+  AdamW (lr 1e-3, weight decay 1e-4), batch 256, cosine LR, at most 10 epochs, early stop
+  after 2 epochs without a val top-1 gain. Best checkpoint by val top-1 goes to
+  `data/checkpoints/<name>.pt` (gitignored); the full state after every epoch goes to
+  `<name>_last.pt`, which `--resume` continues from with the original hyperparameters. PyTorch CPU; university cluster is the
   fallback, not the plan.
 - Play: sample from top-k=5 with temperature 1.0 for variety; eval uses argmax.
 - Penultimate pooled features are exposed as `embed(board) -> np.ndarray` for retrieval.
