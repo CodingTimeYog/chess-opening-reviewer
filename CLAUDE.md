@@ -107,15 +107,18 @@ distribution over GM-preferred moves that generalizes to positions never seen in
 
 **Retrieval (`chess_trainer.rag`):** hybrid. Exact `fen_norm` lookup first; if fewer than
 k hits, nearest neighbors by cosine on policy embeddings (numpy brute force; corpus is
-small). Each hit returns game metadata, the move played from this position, and the full
-PGN for the embedded viewer. At equal score the game with the higher average rating ranks first, then the most recent
+small), within the same opening. Each hit returns game metadata and the move played from
+the matched position; the full PGN for the embedded viewer is added with the API. One hit
+per game. The eval index holds train games only; the app index holds every game. At equal score the game with the higher average rating ranks first, then the most recent
 year.
 
 **Engine (`chess_trainer.engine`):** Stockfish via python-chess UCI. Depth 14, one
 thread per analysis, several engines in parallel. A position is analysed once with MultiPV
 equal to its number of legal moves, and every move's score is cached by
 `(fen_norm, move, depth)` in `data/cache/engine.sqlite`, so scoring a new agent or
-checkpoint on already-analysed positions needs no engine calls.
+checkpoint on already-analysed positions needs no engine calls. Live feedback uses
+`LiveAnalyser` instead: two short searches per move (best move, then the move played),
+cached in a separate `live` table, because scoring every legal move takes about 10 s.
 Path from `STOCKFISH_PATH`; default
 `C:/Users/aswin/Desktop/Chess_Engines/stockfish/stockfish-windows-x86-64-avx2.exe`.
 
@@ -128,10 +131,14 @@ move. Events, each with a structured payload:
 - `castled`, `queens_off`, `minor_piece_trade`
 - `opening_end` (ply cap or book exhaustion), which triggers the full-game review
 
+Built: `left_repertoire`, `left_book`, `eval_swing`, `opening_end`. Deferred until the API
+is up: `structure_shift`, `castled`, `queens_off`, `minor_piece_trade`.
+
 **Feedback (`chess_trainer.feedback`):** two layers.
 1. **Template layer** (always on): deterministic text from the structured facts:
    classification, cp loss, engine best move, most common GM move, repertoire move if any,
-   and up to 3 cited games. This is the ground truth for the correctness metric.
+   the prep author's comment, and up to 3 cited games. Citations are only ever games that
+   reached the exact position. This is the ground truth for the correctness metric.
 2. **LLM layer** (optional, `--llm ollama`): local Ollama model rewrites the template facts
    into prose explaining the idea. It receives only the structured JSON and must cite
    nothing outside it. Model: `qwen2.5:3b` (pull on first use). No paid APIs.
@@ -149,8 +156,8 @@ opening separately, on all positions and on the strict subset. Plots via
 |---|---|
 | Opening coverage | % held-out positions with a non-fallback move; % test lines, replayed along the master moves, where the agent's first 10 own moves are all non-fallback and its top move is theory (played from that position in train, or in repertoire). Lines with fewer than 10 own moves are excluded. Reported with the agent on each side |
 | Move quality | On every held-out position: top-1/top-3 agreement with the GM move (policy ties scored as the expected hit under a random tie-break) plus legal-move sanity checks. On a seeded sample of distinct positions, 500 seen + 500 strict per opening: mean/median centipawn loss vs Stockfish best (scores clipped to +/-1000 cp), blunder rate (CPL >= 100), and WDL expectation loss. Reported for the agent's top move, for sampling from its policy, and for the GM move as reference |
-| Retrieval relevance | precision@5 and MRR; relevant = retrieved game reaches the exact position, or shares ECO and the next GM move |
-| Feedback correctness | on a labeled set of (position, player move) with engine ground truth: classification accuracy, best move named correctly, zero hallucinated citations (every cited game exists in the corpus and reached the position) |
+| Retrieval relevance | `python -m chess_trainer.eval.retrieval [--checkpoint <name>]`. precision@5 and MRR on the move-quality sample, train-only index; relevant = retrieved game reaches the exact position, or shares ECO and the next GM move. Methods: random same-opening same-ply control, exact lookup, hybrid (exact + embeddings) |
+| Feedback correctness | `python -m chess_trainer.eval.feedback`. Labeled set: for each sample position the GM move, the engine's best move and a seeded random move, with ground truth from the full-move Stockfish cache. The live two-search feedback path is scored on classification accuracy, best move named correctly, text consistent with facts, and zero hallucinated citations (every cited game exists in the corpus and reached the position) |
 
 Headline experiment: book vs policy on strict held-out positions, plus ablations
 (result weighting, value head). Engine evals of the test set are precomputed and cached.
