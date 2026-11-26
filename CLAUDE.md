@@ -80,13 +80,18 @@ Out of book: uniform random legal move, and `fallback=True` is recorded. This is
 **Learned policy (`chess_trainer.agents.policy`):**
 - Input: 19 planes x 8x8: 12 piece planes, side to move, 4 castling rights, en-passant
   file, normalized ply. Board is always oriented from the side to move.
-- Model: ResNet, 6 residual blocks, 64 channels, policy head to 4096 from-to logits
-  plus 4x8 promotion logits (4128 total), masked to legal moves. About 0.4M params.
+- Model: ResNet, 6 residual blocks, 64 channels, 465,441 params. Policy head: a 1x1 conv
+  giving 4096 from-to logits (index `to * 64 + from`) plus 4x8 promotion logits (piece x
+  target file) from the pooled features. A move's logit is its from-to logit plus, for a
+  promotion, its promotion logit; the softmax runs over the legal moves only.
 - Objective: cross-entropy vs the GM move, with per-sample weight 1.0 for the winner's
   moves, 0.75 for draws, 0.5 for the loser's moves (ablation: unweighted).
 - Auxiliary value head (tanh, predicts result) with 0.25 loss weight. Ablation: off.
-- Training: AdamW, cosine LR, at most 10 epochs, early stop on val top-1. PyTorch CPU on
-  16 threads; university cluster is the fallback, not the plan.
+- Training: `uv run python -m chess_trainer.agents.train --name resnet_main`. AdamW
+  (lr 1e-3, weight decay 1e-4), batch 256, cosine LR, at most 10 epochs, early stop after
+  2 epochs without a val top-1 gain. Best checkpoint by val top-1 goes to
+  `data/checkpoints/<name>.pt` (gitignored). PyTorch CPU; university cluster is the
+  fallback, not the plan.
 - Play: sample from top-k=5 with temperature 1.0 for variety; eval uses argmax.
 - Penultimate pooled features are exposed as `embed(board) -> np.ndarray` for retrieval.
 
@@ -128,7 +133,8 @@ move. Events, each with a structured payload:
 
 ## 6. Evaluation harness (`chess_trainer.eval`)
 
-`uv run python -m chess_trainer.eval --agent {book,policy} --split test`
+`uv run python -m chess_trainer.eval --agent {book,book-weighted,policy} --split test`
+(`--checkpoint <name>` for the policy, `--compare book` to prepend a strict-subset table)
 writes `results/<agent>-<split>/metrics.json` and `metrics.md`. Every run reports each
 opening separately, on all positions and on the strict subset. Plots via
 `chess_trainer.eval.plots`.
