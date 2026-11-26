@@ -6,7 +6,7 @@ import pytest
 
 from chess_trainer.data.ingest import build_corpus, fen_norm
 from chess_trainer.data.openings import OPENINGS, ROOT_FENS, classify
-from chess_trainer.data.repertoire import build_tree
+from chess_trainer.data.repertoire import build_tree, repertoire_moves
 from chess_trainer.data.split import assign_splits, mark_strict
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -138,3 +138,37 @@ def test_repertoire_tree_keeps_only_root_chapters():
         chess.Board("rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
     )
     assert set(tree[after_nf3]) == {"b8c6"}
+
+
+def _fen_after(san: str) -> str:
+    board = chess.Board()
+    for tok in san.split():
+        board.push_san(tok)
+    return fen_norm(board)
+
+
+def test_repertoire_side_only_main_moves_without_dubious_nags():
+    tree, _ = build_tree([FIXTURES / "prep.pgn"])
+    after_a6 = tree[_fen_after("e4 e5 Nf3 Nc6 Bb5 a6")]
+    assert after_a6["b5a4"]["side"] == "own"
+    assert after_a6["b5a4"]["in_repertoire"] is True
+    assert after_a6["b5c6"]["in_repertoire"] is False  # side variation
+    assert after_a6["b5c6"]["nags"] == [6]
+    assert after_a6["b5c4"]["in_repertoire"] is False
+    # a main move tagged ?! is not a recommendation either
+    d4 = tree[_fen_after("e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6")]["d2d4"]
+    assert d4["main"] is True and d4["in_repertoire"] is False
+    assert repertoire_moves(tree, _fen_after("e4 e5 Nf3 Nc6 Bb5 a6")) == {"b5a4"}
+    assert repertoire_moves(tree, "not a position") == set()
+
+
+def test_opponent_side_keeps_every_branch_on_the_repertoire_path():
+    tree, _ = build_tree([FIXTURES / "prep.pgn"])
+    root = tree[ROOT_FENS["ruy_lopez"]]
+    assert root["a7a6"]["side"] == root["g8f6"]["side"] == "opp"
+    assert root["a7a6"]["in_repertoire"] and root["g8f6"]["in_repertoire"]
+    # the recommended reply inside an opponent side branch is repertoire
+    assert tree[_fen_after("e4 e5 Nf3 Nc6 Bb5 Nf6")]["e1g1"]["in_repertoire"] is True
+    # moves below a rejected own-side move are kept for reference but are off the path
+    assert tree[_fen_after("e4 e5 Nf3 Nc6 Bb5 a6 Bxc6")]["d7c6"]["in_repertoire"] is False
+    assert tree[_fen_after("e4 e5 Nf3 Nc6 Bb5 a6 Bxc6 dxc6")]["e1g1"]["in_repertoire"] is False

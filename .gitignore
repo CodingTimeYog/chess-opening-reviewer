@@ -4,6 +4,9 @@
 # Data: raw PGNs, processed Parquet, engine cache (never committed)
 /data/
 
+# Eval outputs: only metrics.md and plots are committed
+/results/**/*.json
+
 # Python
 .venv/
 __pycache__/

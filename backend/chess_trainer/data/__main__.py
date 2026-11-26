@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
@@ -18,20 +17,6 @@ STAGE_LABELS = {
     "has_result": "decisive or drawn result",
     "unique": "after removing exact duplicates (final corpus)",
 }
-
-
-def _git_sha() -> str:
-    try:
-        done = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=config.REPO_ROOT,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
-    return done.stdout.strip()
 
 
 def stats_markdown(stats: dict, prep: dict, tree_size: int, sha: str) -> str:
@@ -88,7 +73,7 @@ def main() -> None:
     masters = sorted((args.raw / "masters").glob("*.pgn"))
     games, positions, stats = build_corpus(masters, seed=args.seed)
     tree, prep = build_tree(sorted((args.raw / "prep").glob("*.pgn")))
-    sha = _git_sha()
+    sha = config.git_sha()
 
     args.out.mkdir(parents=True, exist_ok=True)
     args.results.mkdir(parents=True, exist_ok=True)
