@@ -45,3 +45,9 @@ def test_comparison_table_puts_both_agents_side_by_side_on_strict_positions():
     # the book falls back on every strict position; an agent without a fallback covers all
     assert coverage_row.split("|")[2:4] == [" 0.0% ", " 100.0% "]
     assert "n/a" in text  # the Taimanov columns are empty in this fixture
+
+    three = comparison_markdown(dict(ours, agent="hybrid"), [book, ours])
+    assert "hybrid vs book, resnet-main on strict positions" in three
+    assert "Ruy Lopez: book | Ruy Lopez: resnet-main | Ruy Lopez: hybrid" in three
+    assert "all positions and the seen sample" in three
+    assert "Top-1 agreement with master, all positions" in three

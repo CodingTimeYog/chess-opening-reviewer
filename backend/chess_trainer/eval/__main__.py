@@ -2,6 +2,8 @@
 
 uv run python -m chess_trainer.eval --agent book --split test
 uv run python -m chess_trainer.eval --agent policy --checkpoint resnet_main --compare book
+uv run python -m chess_trainer.eval --agent hybrid --checkpoint resnet_main \
+    --compare book resnet-main
 """
 
 import argparse
@@ -13,6 +15,7 @@ import pandas as pd
 from chess_trainer import config
 from chess_trainer.agents.base import Agent
 from chess_trainer.agents.book import BookAgent
+from chess_trainer.agents.hybrid import HybridAgent
 from chess_trainer.data.repertoire import load_tree
 from chess_trainer.engine import EvalCache, evaluate_positions
 from chess_trainer.eval.compare import comparison_markdown
@@ -26,26 +29,34 @@ from chess_trainer.eval.quality import (
 )
 
 
-def build_agent(args: argparse.Namespace, positions: pd.DataFrame) -> tuple[Agent, str]:
+def build_agent(args: argparse.Namespace, positions: pd.DataFrame, tree: dict) -> tuple[Agent, str]:
     """The agent and the name of its run directory."""
-    if args.agent == "policy":
+    if args.agent in ("policy", "hybrid"):
         from chess_trainer.agents.policy import PolicyAgent  # imports torch
 
         if not args.checkpoint:
-            raise SystemExit("--agent policy needs --checkpoint (a name in data/checkpoints)")
+            raise SystemExit(f"--agent {args.agent} needs --checkpoint (a name or a path)")
         path = Path(args.checkpoint)
         if not path.exists():
             path = config.CHECKPOINT_DIR / f"{args.checkpoint}.pt"
-        return PolicyAgent.from_checkpoint(path, seed=args.seed), path.stem.replace("_", "-")
+        network = PolicyAgent.from_checkpoint(path, seed=args.seed)
+        if args.agent == "policy":
+            return network, path.stem.replace("_", "-")
+        book = BookAgent.from_positions(positions, seed=args.seed)
+        return HybridAgent(book, network, tree, seed=args.seed), "hybrid"
     weighted = args.agent == "book-weighted"
     return BookAgent.from_positions(positions, result_weighted=weighted, seed=args.seed), args.agent
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate an agent on held-out positions.")
-    parser.add_argument("--agent", choices=["book", "book-weighted", "policy"], required=True)
+    parser.add_argument(
+        "--agent", choices=["book", "book-weighted", "policy", "hybrid"], required=True
+    )
     parser.add_argument("--checkpoint", help="policy checkpoint: a path or a name")
-    parser.add_argument("--compare", help="append a strict-subset comparison with this run")
+    parser.add_argument(
+        "--compare", nargs="+", default=[], help="runs to put side by side with this one"
+    )
     parser.add_argument("--split", choices=["val", "test"], default="test")
     parser.add_argument("--seed", type=int, default=config.SEED)
     parser.add_argument("--data", type=Path, default=config.PROCESSED_DIR)
@@ -59,7 +70,7 @@ def main() -> None:
 
     positions = pd.read_parquet(args.data / "positions.parquet")
     tree = load_tree(args.data / "repertoire.json")
-    agent, run_name = build_agent(args, positions)
+    agent, run_name = build_agent(args, positions, tree)
     agent.name = run_name
     sha = config.git_sha()
 
@@ -89,9 +100,9 @@ def main() -> None:
     }
     report = metrics_markdown(coverage) + "\n" + quality_markdown(quality)
     if args.compare:
-        other = args.results / f"{args.compare}-{args.split}" / "metrics.json"
-        baseline = json.loads(other.read_text(encoding="utf-8"))
-        report = comparison_markdown(metrics, baseline) + "\n" + report
+        paths = [args.results / f"{name}-{args.split}" / "metrics.json" for name in args.compare]
+        baselines = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
+        report = comparison_markdown(metrics, baselines) + "\n" + report
 
     run_dir = args.results / f"{run_name}-{args.split}"
     run_dir.mkdir(parents=True, exist_ok=True)
