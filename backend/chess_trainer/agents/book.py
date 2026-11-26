@@ -11,7 +11,7 @@ from chess_trainer.data.openings import fen_norm
 WIN, DRAW, LOSS = 1.0, 0.75, 0.5
 
 
-def _result_weights(positions: pd.DataFrame) -> pd.Series:
+def result_weights(positions: pd.DataFrame) -> pd.Series:
     white_to_move = positions["ply"] % 2 == 0
     winner_is_white = positions["result"].map({"1-0": True, "0-1": False})
     weights = pd.Series(DRAW, index=positions.index)
@@ -34,7 +34,7 @@ class BookAgent(Agent):
     ) -> "BookAgent":
         """Build the book from the train split only; val and test rows are ignored."""
         train = positions[positions["split"] == "train"]
-        weights = _result_weights(train) if result_weighted else pd.Series(1.0, index=train.index)
+        weights = result_weights(train) if result_weighted else pd.Series(1.0, index=train.index)
         totals = weights.groupby([train["fen_norm"], train["move_uci"]]).sum()
         book: dict[str, dict[str, float]] = {}
         for (fen, uci), weight in totals.items():

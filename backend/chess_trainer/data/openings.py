@@ -13,6 +13,11 @@ def fen_norm(board: chess.Board) -> str:
     return board.epd()
 
 
+def board_from(fen: str, ply: int = 0) -> chess.Board:
+    """Board for a `fen_norm`, with the move number restored so `board.ply() == ply`."""
+    return chess.Board(f"{fen} 0 {ply // 2 + 1}")
+
+
 @dataclass(frozen=True)
 class Opening:
     id: str

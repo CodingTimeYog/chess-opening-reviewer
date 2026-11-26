@@ -9,6 +9,7 @@ DATA_DIR = Path(os.environ.get("CHESS_TRAINER_DATA", REPO_ROOT / "data"))
 RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 CACHE_DIR = DATA_DIR / "cache"
+CHECKPOINT_DIR = DATA_DIR / "checkpoints"
 RESULTS_DIR = REPO_ROOT / "results"
 
 STOCKFISH_PATH = Path(
