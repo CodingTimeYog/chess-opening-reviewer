@@ -16,8 +16,10 @@ def _engine(facts: dict) -> str | None:
     if label is None:
         return None
     best = facts["best"]["san"]
-    if facts["best"]["uci"] == facts["played"]["uci"] or facts["cp_loss"] == 0:
+    if facts["best"]["uci"] == facts["played"]["uci"]:
         return f"{played} is the engine's first choice."
+    if facts["cp_loss"] == 0:  # a different move that the engine scores no worse
+        return f"{played} is as good as the engine's first choice, {best}."
     pawns = f"{facts['cp_loss'] / 100:.1f} pawns"
     if label == "good":
         return f"{played} is fine: within {pawns} of the engine's first choice, {best}."

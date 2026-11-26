@@ -136,6 +136,15 @@ def test_a_good_repertoire_move_and_a_position_outside_book_and_prep(builder):
     assert "No master game in the corpus reached this position" in feedback["text"]
 
 
+def test_a_different_move_that_loses_nothing_is_not_called_the_first_choice(positions, tree):
+    builder = FeedbackBuilder(
+        BookAgent.from_positions(positions), tree, Retriever(positions), StubAnalyser({"d2d3": 0})
+    )
+    feedback = builder.move_feedback(board_after(AFTER_A6), chess.Move.from_uci("d2d3"))
+    assert feedback["facts"]["cp_loss"] == 0 and feedback["facts"]["best"]["san"] == "Ba4"
+    assert feedback["text"].startswith("d3 is as good as the engine's first choice, Ba4.")
+
+
 def _play(builder, san, triggers, analyse=lambda ply: True):
     board, events = chess.Board(), []
     for ply, tok in enumerate(san.split()):
