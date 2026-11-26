@@ -1,3 +1,19 @@
-# Local-only project spec and Claude settings
-CLAUDE.md
+# Claude local settings
 .claude/
+
+# Data: raw PGNs, processed Parquet, engine cache (never committed)
+data/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Model checkpoints
+*.pt
+
+# Node
+node_modules/
+dist/

@@ -4,6 +4,10 @@ Two tracks run in parallel: **ML/backend** (Yogi) and **UI** (teammate). Each ph
 definition of done. Course priority: agent, baseline, eval and feedback first, UI second.
 Thanksgiving is Thu Nov 26; the plan assumes a light Nov 26 and 27.
 
+**Scope change, Nov 25:** v1 is Ruy Lopez (White) and Sicilian Taimanov (Black) only, on an
+OTB-only corpus. The Italian and Lichess Elite are dropped. Backend work on Phases 0 and 1
+started Nov 25, so those phases are behind the dates below.
+
 ## Phase 0: Scaffold (Wed Nov 19 to Thu Nov 20)
 Backend: uv project, pytest, ruff, `.gitignore` for data, config module, Stockfish wrapper
 with cache, fixture PGNs, `docs/API.md` plus exported `openapi.json` from stub routes.
@@ -12,8 +16,9 @@ playable local board (no agent yet).
 **Done when:** `uv run pytest` and `pnpm test` are both green; stub API returns mocked shapes.
 
 ## Phase 1: Data, baseline, harness skeleton (Fri Nov 21 to Mon Nov 24)
-- Repertoire tree from prep PGNs; ingest Lichess Elite and OTB PGNs; rating filter;
-  truncate; Parquet; seeded game-level split; strict-subset computation.
+- Repertoire tree from prep PGNs (Ruy Lopez chapters and the Taimanov file); ingest OTB
+  PGNs; classify by root position; rating filter; truncate; Parquet; seeded game-level
+  split; strict-subset computation.
 - Book baseline agent with fallback logging.
 - Eval harness CLI with **opening coverage** implemented end to end; engine cache
   precompute for the test split started in the background.
@@ -58,7 +63,8 @@ end to end on localhost.
 ## Risk register
 | Risk | Mitigation |
 |---|---|
-| Too few 2500+ games in some Sicilian sub-lines | fall back to 2400+ for that line and report it; prep PGNs still define the repertoire |
+| Taimanov corpus too small at 2500+ (2,419 games) | decided Nov 25: both players >= 2400 for the Taimanov; filter and counts logged in `results/data_stats.md` |
+| OTB-only corpus is small (no Lichess) | strict held-out subset may be small; report its size next to every metric |
 | CPU training too slow | shrink to 4 blocks / 48 channels; subsample train set; cluster as last resort |
 | Ollama output wrong or slow | template layer is always the shipped default; LLM is an ablation |
 | Teammate blocked on API | MSW mocks from day one; API contract frozen in `docs/API.md` |
